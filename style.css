@@ -306,3 +306,107 @@
     opacity: 1;
     color: var(--SmartThemeQuoteColor, var(--SmartThemeBodyColor));
 }
+
+
+/* Character-first manager navigation */
+.parallel-story-character-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 7px;
+    padding: 2px 0 10px;
+}
+.parallel-story-character-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-width: 0;
+    padding: 9px 11px;
+    border: 1px solid var(--SmartThemeBorderColor, rgba(90, 95, 100, .14));
+    border-radius: 10px;
+    color: inherit;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+}
+.parallel-story-character-card:hover {
+    background: var(--SmartThemeBlurTintColor, rgba(120, 125, 130, .08));
+}
+.parallel-story-character-avatar,
+.parallel-story-selected-character img {
+    flex: 0 0 auto;
+    width: 46px;
+    height: 46px;
+    border-radius: 8px;
+    object-fit: cover;
+    background: var(--SmartThemeBorderColor, rgba(120, 125, 130, .12));
+}
+.parallel-story-character-info {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    flex-direction: column;
+    gap: 4px;
+}
+.parallel-story-character-name {
+    overflow: hidden;
+    font-size: 14px;
+    font-weight: 620;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.parallel-story-character-count {
+    color: var(--SmartThemeQuoteColor, #858990);
+    font-size: 11px;
+}
+.parallel-story-character-arrow {
+    color: var(--SmartThemeQuoteColor, #858990);
+    font-size: 23px;
+}
+.parallel-story-character-heading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 10px;
+    padding: 2px 1px 10px;
+    border-bottom: 1px solid var(--SmartThemeBorderColor, rgba(90, 95, 100, .14));
+}
+.parallel-story-back {
+    padding: 6px 8px;
+    border: 0;
+    border-radius: 6px;
+    color: var(--SmartThemeQuoteColor, #858990);
+    background: transparent;
+    font-size: 12px;
+    white-space: nowrap;
+    cursor: pointer;
+}
+.parallel-story-back:hover {
+    color: var(--SmartThemeBodyColor, #30343a);
+    background: var(--SmartThemeBlurTintColor, rgba(120, 125, 130, .1));
+}
+.parallel-story-selected-character {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 650;
+}
+.parallel-story-selected-character img {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+}
+.parallel-story-character-heading .parallel-story-import {
+    flex: 0 0 auto;
+}
+.parallel-story-group .parallel-story-actions button[data-action="delete-chat"],
+.parallel-story-group .parallel-story-actions button[data-action="delete-branch"] {
+    color: var(--SmartThemeQuoteColor, #858990);
+}
+.parallel-story-item .parallel-story-actions button[data-action="delete-chat"]:hover,
+.parallel-story-item .parallel-story-actions button[data-action="delete-branch"]:hover {
+    color: var(--SmartThemeEmColor, #9a5d5d);
+}
