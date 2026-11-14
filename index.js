@@ -258,13 +258,97 @@
         document.getElementById(ROOT_ID)?.remove();
     }
 
+    function renderCharacterCards(root, entries) {
+        const context = getContext();
+        const characters = (context?.characters ?? []).map((character, index) => ({
+            character,
+            id: String(index),
+            chats: entries.filter((entry) => entry.characterId === String(index) && entry.fileName),
+            error: entries.find((entry) => entry.characterId === String(index) && entry.error)?.error,
+        })).filter((item) => item.character?.avatar);
+
+        const list = root.querySelector('.parallel-story-list');
+        const count = root.querySelector('.parallel-story-count');
+        if (count) count.textContent = `${characters.length} 位角色`;
+        if (!list) return;
+
+        list.innerHTML = characters.length ? `
+            <div class="parallel-story-character-grid">
+                ${characters.map(({ character, id, chats }) => `
+                    <button class="parallel-story-character-card" data-action="select-character" data-character-id="${escapeHtml(id)}">
+                        <img class="parallel-story-character-avatar" src="/characters/${encodeURIComponent(character.avatar)}" alt="" loading="lazy">
+                        <span class="parallel-story-character-info">
+                            <span class="parallel-story-character-name">${escapeHtml(character.name || '未命名角色')}</span>
+                            <span class="parallel-story-character-count">${chats.length} 份聊天记录</span>
+                        </span>
+                        <span class="parallel-story-character-arrow">›</span>
+                    </button>
+                `).join('')}
+            </div>` : '<div class="parallel-story-empty">酒馆中还没有可管理的角色卡</div>';
+    }
+
+    function renderCharacterChats(root, entries, characterId) {
+        const context = getContext();
+        const character = getCharacter(context, characterId);
+        if (!character) {
+            renderCharacterCards(root, entries);
+            return;
+        }
+
+        const currentScope = getCurrentScope(context);
+        const currentKey = JSON.stringify([currentScope.characterAvatar, currentScope.chatFile]);
+        const chats = entries.filter((entry) => entry.characterId === String(characterId));
+        const list = root.querySelector('.parallel-story-list');
+        const count = root.querySelector('.parallel-story-count');
+        if (count) count.textContent = `${chats.filter((item) => item.fileName).length} 份聊天记录`;
+
+        const rows = chats.map((entry) => {
+            if (entry.error) return `<div class="parallel-story-chat-error">${escapeHtml(entry.error)}</div>`;
+            if (!entry.fileName) return '';
+            const branch = getBranchForChat({ avatar: entry.characterAvatar }, entry.fileName);
+            const legacyBranch = !branch ? getStore().branches.find((item) =>
+                normalizeChatFile(item.chatFile) === entry.fileName
+                && !item.sourceCharacterAvatar
+                && String(item.sourceCharacterId ?? '') === entry.characterId
+            ) : null;
+            const branchMeta = branch || legacyBranch;
+            const isBranch = Boolean(branchMeta);
+            const active = JSON.stringify([entry.characterAvatar, entry.fileName]) === currentKey;
+            const title = branchMeta?.name ?? entry.fileName;
+            const detail = isBranch
+                ? `剧情分支 · 来源第 ${Number(branchMeta.sourceMessageId) + 1} 楼`
+                : '普通聊天';
+            return `
+                <article class="parallel-story-item${active ? ' is-active' : ''}">
+                    <button class="parallel-story-open" data-action="open-chat" data-character-id="${escapeHtml(entry.characterId)}" data-file="${escapeHtml(entry.fileName)}">
+                        <span class="parallel-story-item-name">${escapeHtml(title)}</span>
+                        <span class="parallel-story-item-meta">${escapeHtml(detail)}${active ? ' · 当前聊天' : ''}</span>
+                    </button>
+                    <div class="parallel-story-actions">
+                        <button data-action="rename-chat" data-character-id="${escapeHtml(entry.characterId)}" data-avatar="${escapeHtml(entry.characterAvatar)}" data-file="${escapeHtml(entry.fileName)}" title="重命名原生聊天记录">改名</button>
+                        <button data-action="export-chat" data-avatar="${escapeHtml(entry.characterAvatar)}" data-file="${escapeHtml(entry.fileName)}" title="导出原生 JSONL">导出</button>
+                        ${isBranch && branchMeta?.id
+                            ? `<button data-action="delete-branch" data-id="${escapeHtml(branchMeta.id)}" title="删除分支及原生聊天">删除</button>`
+                            : !active ? `<button data-action="delete-chat" data-character-id="${escapeHtml(entry.characterId)}" data-avatar="${escapeHtml(entry.characterAvatar)}" data-file="${escapeHtml(entry.fileName)}" title="删除原生聊天记录">删除</button>` : ''}
+                    </div>
+                </article>`;
+        }).join('');
+
+        if (list) list.innerHTML = `
+            <div class="parallel-story-character-heading">
+                <button class="parallel-story-back" data-action="back-characters">‹ 所有角色</button>
+                <div class="parallel-story-selected-character">
+                    <img src="/characters/${encodeURIComponent(character.avatar)}" alt="" loading="lazy">
+                    <span>${escapeHtml(character.name || '未命名角色')}</span>
+                </div>
+                <button class="parallel-story-import" data-action="import-chat" data-character-id="${escapeHtml(characterId)}">导入聊天</button>
+            </div>
+            ${rows || '<div class="parallel-story-empty">这个角色还没有聊天记录</div>'}`;
+    }
+
     async function renderManager() {
         closeManager();
 
-        const store = getStore();
-        const context = getContext();
-        const currentScope = getCurrentScope(context);
-        const currentKey = JSON.stringify([currentScope.characterAvatar, currentScope.chatFile]);
         const root = document.createElement('div');
         root.id = ROOT_ID;
         root.className = 'parallel-story-backdrop';
@@ -273,94 +357,39 @@
                 <header class="parallel-story-header">
                     <div>
                         <div class="parallel-story-title">平行叙事</div>
-                        <div class="parallel-story-subtitle">角色与聊天记录</div>
+                        <div class="parallel-story-subtitle">选择角色卡，管理对应聊天记录</div>
                     </div>
                     <button class="parallel-story-icon-button" data-action="close" aria-label="关闭">×</button>
                 </header>
                 <div class="parallel-story-toolbar">
                     <button class="parallel-story-primary" data-action="create">＋ 从当前聊天创建剧情分支</button>
-                    <span class="parallel-story-count">正在读取聊天记录…</span>
+                    <span class="parallel-story-count">正在读取…</span>
                 </div>
-                <div class="parallel-story-list"><div class="parallel-story-empty">正在整理角色聊天记录</div></div>
-                <footer class="parallel-story-footer">原有聊天记录只作为入口读取，不会复制或另存正文。删除分支会同时删除酒馆原生聊天文件。</footer>
+                <div class="parallel-story-list"><div class="parallel-story-empty">正在读取酒馆角色卡</div></div>
+                <footer class="parallel-story-footer">聊天正文仍由酒馆原生管理。普通聊天和剧情分支均可重命名、导出或删除；当前打开的聊天不能删除。</footer>
             </section>`;
-        root.addEventListener('click', handleManagerClick);
         root.addEventListener('click', (event) => {
-            if (event.target === root) closeManager();
+            if (event.target === root) return closeManager();
+            const button = event.target.closest('button[data-action]');
+            if (!button) return;
+            if (button.dataset.action === 'select-character') {
+                root.dataset.selectedCharacterId = button.dataset.characterId;
+                renderCharacterChats(root, root._entries || [], button.dataset.characterId);
+                return;
+            }
+            if (button.dataset.action === 'back-characters') {
+                delete root.dataset.selectedCharacterId;
+                renderCharacterCards(root, root._entries || []);
+                return;
+            }
+            handleManagerClick(event);
         });
         document.body.append(root);
 
         try {
-            const entries = await collectChatEntries();
+            root._entries = await collectChatEntries();
             if (!root.isConnected) return;
-
-            const grouped = new Map();
-            for (const entry of entries) {
-                const key = entry.error
-                    ? `error:${entry.characterId}`
-                    : String(entry.characterAvatar);
-                if (!grouped.has(key)) grouped.set(key, []);
-                grouped.get(key).push(entry);
-            }
-
-            const groupsMarkup = [...grouped.values()].map((items) => {
-                const first = items[0];
-                const isErrorGroup = Boolean(first.error);
-                const characterName = first.characterName || '未知角色';
-                const groupCurrent = items.some((item) =>
-                    !item.error && JSON.stringify([item.characterAvatar, item.fileName]) === currentKey
-                );
-                const rows = isErrorGroup
-                    ? `<div class="parallel-story-chat-error">${escapeHtml(first.error)}</div>`
-                    : items.sort((a, b) => b.fileName.localeCompare(a.fileName)).map((entry) => {
-                        const branch = getBranchForChat({ avatar: entry.characterAvatar }, entry.fileName);
-                        const legacyBranch = !branch ? store.branches.find((item) =>
-                            normalizeChatFile(item.chatFile) === entry.fileName
-                            && !item.sourceCharacterAvatar
-                            && String(item.sourceCharacterId ?? '') === entry.characterId
-                        ) : null;
-                        const isBranch = Boolean(branch || legacyBranch);
-                        const active = JSON.stringify([entry.characterAvatar, entry.fileName]) === currentKey;
-                        const title = branch?.name ?? legacyBranch?.name ?? entry.fileName;
-                        const branchMeta = branch || legacyBranch;
-                        const detail = isBranch
-                            ? `剧情分支 · 来源第 ${Number(branchMeta.sourceMessageId) + 1} 楼`
-                            : '普通聊天';
-                        const branchId = branchMeta?.id ?? '';
-                        return `
-                            <article class="parallel-story-item${active ? ' is-active' : ''}">
-                                <button class="parallel-story-open" data-action="open-chat" data-character-id="${escapeHtml(entry.characterId)}" data-file="${escapeHtml(entry.fileName)}">
-                                    <span class="parallel-story-item-name">${escapeHtml(title)}</span>
-                                    <span class="parallel-story-item-meta">${escapeHtml(detail)}${active ? ' · 当前聊天' : ''}</span>
-                                </button>
-                                <div class="parallel-story-actions">
-                                    <button data-action="rename-chat" data-character-id="${escapeHtml(entry.characterId)}" data-avatar="${escapeHtml(entry.characterAvatar)}" data-file="${escapeHtml(entry.fileName)}" title="重命名原生聊天记录">改名</button>
-                                    <button data-action="export-chat" data-avatar="${escapeHtml(entry.characterAvatar)}" data-file="${escapeHtml(entry.fileName)}" title="导出原生 JSONL">导出</button>
-                                    ${isBranch && branchId ? `
-                                        <button data-action="delete-branch" data-id="${escapeHtml(branchId)}" title="删除分支及原生聊天">删除</button>
-                                    ` : ''}
-                                </div>
-                            </article>`;
-                    }).join('');
-
-                return `
-                    <section class="parallel-story-group${groupCurrent ? ' is-current' : ''}">
-                        <header class="parallel-story-group-header">
-                            <div class="parallel-story-group-title">${escapeHtml(characterName)}</div>
-                            <div class="parallel-story-group-meta">
-                                ${items.length} 份聊天记录
-                                ${groupCurrent ? '<span class="parallel-story-current-tag">当前角色</span>' : ''}
-                                <button class="parallel-story-import" data-action="import-chat" data-character-id="${escapeHtml(first.characterId)}">导入聊天</button>
-                            </div>
-                        </header>
-                        ${rows || '<div class="parallel-story-empty">暂无聊天记录</div>'}
-                    </section>`;
-            }).join('');
-
-            const list = root.querySelector('.parallel-story-list');
-            const count = root.querySelector('.parallel-story-count');
-            count.textContent = `${entries.filter((item) => item.fileName).length} 份聊天记录`;
-            list.innerHTML = groupsMarkup || '<div class="parallel-story-empty">还没有可显示的聊天记录</div>';
+            renderCharacterCards(root, root._entries);
         } catch (error) {
             console.error('[平行叙事] 读取聊天记录失败：', error);
             const list = root.querySelector('.parallel-story-list');
@@ -453,6 +482,49 @@
             }, { once: true });
             document.body.append(picker);
             picker.click();
+            return;
+        }
+
+        if (action === 'delete-chat') {
+            const context = getContext();
+            const characterId = button.dataset.characterId;
+            const avatar = button.dataset.avatar;
+            const fileName = normalizeChatFile(button.dataset.file);
+            const scope = getCurrentScope(context);
+            if (scope.characterAvatar === avatar && scope.chatFile === fileName) {
+                showNotice('这份聊天记录当前正处于打开状态。请先切换到其他聊天，再删除它。', 'warning');
+                return;
+            }
+            const confirmed = window.confirm(
+                `确定永久删除普通聊天记录「${fileName}」吗？\\n\\n这会同步删除酒馆原生聊天文件，无法通过平行叙事恢复。`
+            );
+            if (!confirmed) return;
+            try {
+                const { getRequestHeaders } = await loadNativeApis();
+                const response = await fetch('/api/chats/delete', {
+                    method: 'POST',
+                    headers: getRequestHeaders(),
+                    body: JSON.stringify({ chatfile: `${fileName}.jsonl`, avatar_url: avatar }),
+                });
+                if (!response.ok) throw new Error(`酒馆删除聊天文件失败（${response.status}）`);
+                if (context.eventSource && context.eventTypes?.CHAT_DELETED) {
+                    await context.eventSource.emit(context.eventTypes.CHAT_DELETED, fileName);
+                }
+                const removedIds = store.branches.filter((item) =>
+                    normalizeChatFile(item.chatFile) === fileName
+                    && (item.sourceCharacterAvatar ? item.sourceCharacterAvatar === avatar : String(item.sourceCharacterId ?? '') === String(characterId))
+                ).map((item) => item.id);
+                store.branches = store.branches.filter((item) => !removedIds.includes(item.id));
+                for (const child of store.branches) {
+                    if (removedIds.includes(child.parentId)) child.parentId = null;
+                }
+                saveStore();
+                await renderManager();
+                showNotice('原生聊天记录已删除。', 'success');
+            } catch (error) {
+                console.error('[平行叙事] 删除原生聊天失败：', error);
+                showNotice(error?.message || '删除失败。', 'error');
+            }
             return;
         }
 
