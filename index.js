@@ -569,7 +569,7 @@
 
     function showNotice(message, type = 'info') {
         if (typeof window.toastr?.[type] === 'function') {
-            window.toastr[type](message, '平行叙事');
+            window.toastr[type](message, '档案');
         } else {
             window.alert(message);
         }
@@ -980,10 +980,10 @@
         root.id = ROOT_ID;
         root.className = 'parallel-story-backdrop';
         root.innerHTML = `
-            <section class="parallel-story-panel" role="dialog" aria-modal="true" aria-label="平行叙事">
+            <section class="parallel-story-panel" role="dialog" aria-modal="true" aria-label="档案">
                 <header class="parallel-story-header">
                     <div>
-                        <div class="parallel-story-title">平行叙事</div>
+                        <div class="parallel-story-title">档案</div>
                         <div class="parallel-story-subtitle">选择角色卡，管理对应聊天记录</div>
                     </div>
                     <button class="parallel-story-icon-button" data-action="close" aria-label="关闭">×</button>
@@ -1131,7 +1131,7 @@
                 return;
             }
             const confirmed = window.confirm(
-                `确定永久删除普通聊天记录「${fileName}」吗？\\n\\n这会同步删除酒馆原生聊天文件，无法通过平行叙事恢复。`
+                `确定永久删除普通聊天记录「${fileName}」吗？\\n\\n这会同步删除酒馆原生聊天文件，无法通过档案恢复。`
             );
             if (!confirmed) return;
             try {
@@ -1259,7 +1259,7 @@
             }
 
             const confirmed = window.confirm(
-                `确定删除分支「${branch.name}」吗？\n\n这会永久删除对应的酒馆原生聊天记录，不能通过平行叙事恢复。`
+                `确定删除分支「${branch.name}」吗？\n\n这会永久删除对应的酒馆原生聊天记录，不能通过档案恢复。`
             );
             if (!confirmed) return;
 
