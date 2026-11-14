@@ -2,6 +2,11 @@
 
 SillyTavern extension: a native chat-record manager with optional parallel-story branch creation.
 
+## 1.6.1
+
+- Floor directory previews and searches the content inside `<content>...</content>`, keeping preceding reasoning text out of the floor list.
+- Messages without a `<content>` wrapper continue to use their ordinary message text.
+
 ## 1.6.0
 
 - Clicking a chat entry now opens a searchable floor directory instead of immediately opening the chat.
