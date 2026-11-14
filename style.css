@@ -140,10 +140,14 @@
 }
 
 .parallel-story-item-meta {
-    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
     max-width: 100%;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    color: var(--SmartThemeQuoteColor, #858990);
+    font-size: 11px;
 }
 
 .parallel-story-actions {
@@ -528,4 +532,13 @@
 .parallel-story-last-author {
     color: var(--SmartThemeQuoteColor, #858990);
     font-weight: 600;
+}
+
+.parallel-story-last-time {
+    flex: 0 0 auto;
+    color: var(--SmartThemeQuoteColor, #858990);
+    font-size: 10px;
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
 }
