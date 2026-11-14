@@ -692,39 +692,45 @@
                 ? `${entry.latestMessageAuthor ? `${entry.latestMessageAuthor}：` : ''}${entry.latestMessagePreview}`
                 : '（暂无可预览的消息）';
 
-            // Branch presentation is intentionally left unchanged for a later design pass.
             if (isBranch) {
-                const detail = `剧情分支 · 来源第 ${Number(branchMeta.sourceMessageId) + 1} 楼`;
+                const parentBranch = branchMeta.parentId
+                    ? getStore().branches.find((item) => item.id === branchMeta.parentId)
+                    : null;
+                const sourceLabel = parentBranch?.name || '主线';
+                const sourceDetail = `源自「${sourceLabel}」· 第 ${Number(branchMeta.sourceMessageId) + 1} 楼`;
                 return `
-                    <article class="parallel-story-item parallel-story-native-item${active ? ' is-active' : ''}">
-                        <div class="select_chat_block_wrapper flex-container parallel-story-native-wrapper">
-                            <button class="select_chat_block wide100p flex-container parallel-story-native-block" data-action="open-chat" data-character-id="${escapeHtml(entry.characterId)}" data-file="${escapeHtml(entry.fileName)}" type="button">
-                                <div id="select_chat_name_wrapper" class="flex-container alignitemscenter justifySpaceBetween wide100p">
-                                    <div class="flex-container alignItemsCenter parallel-story-native-title">
-                                        <small class="select_chat_block_filename select_chat_block_filename_item">${escapeHtml(title)}</small>
-                                        ${active ? '<small class="parallel-story-current-label">当前聊天</small>' : ''}
-                                    </div>
-                                    <div class="flex-container gap10px alignItemsCenter">
-                                        <div class="select_chat_info flex-container">
-                                            <small class="chat_messages_date select_chat_block_filename_item">${escapeHtml(nativeDate)}</small>
-                                            <small class="chat_file_size select_chat_block_filename_item">${escapeHtml(detail)}</small>
-                                            <small class="chat_messages_num select_chat_block_filename_item">(${Number(entry.messageCount || 0)})</small>
-                                        </div>
-                                    </div>
+                    <article class="select_chat_block_wrapper parallel-story-native-chat-item parallel-story-branch-chat-item">
+                        <div class="select_chat_block parallel-story-native-block${active ? ' is-current' : ''}"
+                            data-action="open-chat" data-character-id="${escapeHtml(entry.characterId)}"
+                            data-file="${escapeHtml(entry.fileName)}" role="button" tabindex="0"
+                            aria-current="${active ? 'true' : 'false'}">
+                            <div class="parallel-story-native-title-row">
+                                <div class="parallel-story-native-title">
+                                    <small class="select_chat_block_filename select_chat_block_filename_item">${escapeHtml(title)}</small>
                                 </div>
-                                <div class="select_chat_block_mes">${escapeHtml(preview)}</div>
-                            </button>
-                        </div>
-                        <div class="parallel-story-actions parallel-story-native-actions">
-                            <button class="parallel-story-svg-action" data-action="rename-chat" data-character-id="${escapeHtml(entry.characterId)}" data-avatar="${escapeHtml(entry.characterAvatar)}" data-file="${escapeHtml(entry.fileName)}" title="重命名分支" aria-label="重命名">
-                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5 5 15l10.9-10.9a2.1 2.1 0 0 1 3 3L8 18Z"/><path d="M4 19.5 8 18"/></svg>
-                            </button>
-                            <button class="parallel-story-svg-action" data-action="export-chat" data-avatar="${escapeHtml(entry.characterAvatar)}" data-file="${escapeHtml(entry.fileName)}" title="导出分支 JSONL" aria-label="导出">
-                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4.5h8l4 4v11H6Z"/><path d="M14 4.5v4h4"/><path d="M12 17v-6"/><path d="m9.5 13.5 2.5-2.5 2.5 2.5"/></svg>
-                            </button>
-                            ${!active && branchMeta?.id
-                                ? `<button class="parallel-story-svg-action" data-action="delete-branch" data-id="${escapeHtml(branchMeta.id)}" title="删除分支及原生聊天" aria-label="删除"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14"/><path d="M9 7V5h6v2"/><path d="m18 7-1 12H7L6 7"/><path d="M10 10.5v5M14 10.5v5"/></svg></button>`
-                                : ''}
+                            </div>
+                            <div class="parallel-story-native-meta">
+                                <small class="chat_messages_date select_chat_block_filename_item">${escapeHtml(nativeDate)}</small>
+                                <small class="chat_messages_num select_chat_block_filename_item">(${Number(entry.messageCount || 0)})</small>
+                                <button class="parallel-story-svg-action" data-action="rename-chat"
+                                    data-character-id="${escapeHtml(entry.characterId)}" data-avatar="${escapeHtml(entry.characterAvatar)}"
+                                    data-file="${escapeHtml(entry.fileName)}" title="重命名分支" aria-label="重命名">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5 5 15l10.9-10.9a2.1 2.1 0 0 1 3 3L8 18Z"/><path d="M4 19.5 8 18"/></svg>
+                                </button>
+                                <button class="parallel-story-svg-action" data-action="export-chat"
+                                    data-avatar="${escapeHtml(entry.characterAvatar)}" data-file="${escapeHtml(entry.fileName)}"
+                                    title="导出分支 JSONL" aria-label="导出">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4.5h8l4 4v11H6Z"/><path d="M14 4.5v4h4"/><path d="M12 17v-6"/><path d="m9.5 13.5 2.5-2.5 2.5 2.5"/></svg>
+                                </button>
+                                ${!active ? `<button class="parallel-story-svg-action" data-action="delete-branch"
+                                    data-id="${escapeHtml(branchMeta.id || '')}" data-avatar="${escapeHtml(entry.characterAvatar)}"
+                                    data-character-id="${escapeHtml(entry.characterId)}" data-file="${escapeHtml(entry.fileName)}"
+                                    title="删除分支及原生聊天" aria-label="删除">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14"/><path d="M9 7V5h6v2"/><path d="m18 7-1 12H7L6 7"/><path d="M10 10.5v5M14 10.5v5"/></svg>
+                                </button>` : ''}
+                            </div>
+                            <div class="parallel-story-branch-source">${escapeHtml(sourceDetail)}</div>
+                            <div class="select_chat_block_mes">${escapeHtml(preview)}</div>
                         </div>
                     </article>`;
             }
@@ -901,7 +907,13 @@
         const action = button.dataset.action;
         const id = button.dataset.id;
         const store = getStore();
-        const branch = store.branches.find((item) => item.id === id);
+        const branch = store.branches.find((item) => item.id === id)
+            || (action === 'delete-branch' ? store.branches.find((item) =>
+                normalizeChatFile(item.chatFile) === normalizeChatFile(button.dataset.file)
+                && (item.sourceCharacterAvatar
+                    ? item.sourceCharacterAvatar === button.dataset.avatar
+                    : String(item.sourceCharacterId ?? '') === String(button.dataset.characterId))
+            ) : null);
 
         if (action === 'close') return closeManager();
         if (action === 'create') return createCurrentBranch();
@@ -1019,9 +1031,11 @@
             return;
         }
 
-        if (!branch) return;
-
         if (action === 'delete-branch') {
+            if (!branch) {
+                showNotice('找不到这条分支的索引信息，未删除聊天文件。', 'error');
+                return;
+            }
             const context = getContext();
             const owner = getBranchCharacter(branch, context);
             if (!owner?.character?.avatar) {
