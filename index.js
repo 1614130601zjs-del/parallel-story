@@ -517,11 +517,15 @@
             if (!response.ok) throw new Error(`读取聊天楼层失败（${response.status}）`);
             const messages = await response.json();
             if (!Array.isArray(messages)) throw new Error('酒馆返回的聊天内容格式不正确');
+            // /api/chats/get includes the JSONL metadata row at index 0.
+            // The active Tavern context.chat and native mesid start at the first
+            // actual message, so exclude metadata to keep floor numbers aligned.
+            const floorMessages = messages.slice(1);
             root._floorEntry = entry;
-            root._floorData = messages;
+            root._floorData = floorMessages;
             root._floorQuery = '';
-            root._floorPage = Math.max(0, Math.ceil(messages.length / 40) - 1);
-            if (count) count.textContent = `${messages.length} 楼`;
+            root._floorPage = Math.max(0, Math.ceil(floorMessages.length / 40) - 1);
+            if (count) count.textContent = `${floorMessages.length} 楼`;
             renderFloorPage(root);
         } catch (error) {
             console.error('[平行叙事] 读取楼层目录失败：', error);
