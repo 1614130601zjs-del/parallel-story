@@ -169,7 +169,7 @@
         if (typeof value === 'number' && Number.isFinite(value)) return value;
         if (typeof value !== 'string' || !value.trim()) return 0;
         const trimmed = value.trim();
-        if (/^\\d+(?:\\.\\d+)?$/.test(trimmed)) {
+        if (/^\d+(?:\.\d+)?$/.test(trimmed)) {
             const numeric = Number(trimmed);
             return Number.isFinite(numeric) ? numeric : 0;
         }
