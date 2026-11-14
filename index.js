@@ -470,6 +470,21 @@
             error: entries.find((entry) => entry.characterId === String(index) && entry.error)?.error,
         })).filter((item) => item.character?.avatar);
 
+        // Keep characters with saved chats above empty ones, and pin the
+        // character belonging to the currently active conversation.
+        const currentScope = getCurrentScope(context);
+        characters.sort((a, b) => {
+            const aHasChats = a.chats.length > 0;
+            const bHasChats = b.chats.length > 0;
+            if (aHasChats !== bHasChats) return aHasChats ? -1 : 1;
+
+            const aIsCurrent = a.id === currentScope.characterId;
+            const bIsCurrent = b.id === currentScope.characterId;
+            if (aIsCurrent !== bIsCurrent) return aIsCurrent ? -1 : 1;
+
+            return 0;
+        });
+
         const list = root.querySelector('.parallel-story-list');
         const count = root.querySelector('.parallel-story-count');
         if (count) count.textContent = `${characters.length} 位角色`;
