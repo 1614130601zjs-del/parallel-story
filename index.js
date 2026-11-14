@@ -722,7 +722,7 @@
             }
 
             return `
-                <article class="select_chat_block_wrapper parallel-story-native-item">
+                <article class="select_chat_block_wrapper parallel-story-native-chat-item">
                     <div class="select_chat_block parallel-story-native-block${active ? ' is-current' : ''}"
                         data-action="open-chat" data-character-id="${escapeHtml(entry.characterId)}"
                         data-file="${escapeHtml(entry.fileName)}" role="button" tabindex="0"
