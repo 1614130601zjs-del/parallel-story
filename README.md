@@ -2,7 +2,13 @@
 
 SillyTavern extension: a native chat-record manager with optional parallel-story branch creation.
 
-## 1.5.0
+## 1.6.0
+
+- Clicking a chat entry now opens a searchable floor directory instead of immediately opening the chat.
+- The directory previews native message text, supports paging through long chats, and jumps to the selected floor using SillyTavern's native `/chat-jump` command.
+- Message bodies are fetched from the native chat endpoint on demand and are not stored by the extension.
+
+# 1.5.0
 
 - Replaces the all-characters-expanded view with a character-card picker. Select one character to view only that character's native chats and branches.
 - Adds confirmed deletion for ordinary native chat records. The active chat cannot be deleted; deletion uses SillyTavern's native chat-delete endpoint and refreshes the manager.
