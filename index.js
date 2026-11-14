@@ -25,6 +25,12 @@
         })[char]);
     }
 
+    function extractFloorContent(value) {
+        const raw = String(value ?? '');
+        const match = raw.match(/<content\\b[^>]*>([\\s\\S]*?)<\\/content\\s*>/i);
+        return match ? match[1].trim() : raw.trim();
+    }
+
     function makeId() {
         return window.crypto?.randomUUID?.()
             ?? `ps-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -265,7 +271,7 @@
         const query = String(root._floorQuery || '').trim().toLowerCase();
         const filtered = all.filter((message, index) => {
             if (!query) return true;
-            const text = [index + 1, message?.name, message?.mes, message?.is_user ? '用户 user' : '角色 assistant'].join(' ').toLowerCase();
+            const text = [index + 1, message?.name, extractFloorContent(message?.mes), message?.is_user ? '用户 user' : '角色 assistant'].join(' ').toLowerCase();
             return text.includes(query);
         });
         const pageSize = 40;
@@ -289,7 +295,7 @@
         const rows = page.map((message) => {
             const index = all.indexOf(message);
             const who = message?.is_system ? '系统' : message?.is_user ? '用户' : (message?.name || entry.characterName || '角色');
-            const content = String(message?.mes ?? '').replace(/\\s+/g, ' ').trim();
+            const content = extractFloorContent(message?.mes).replace(/\\s+/g, ' ').trim();
             const preview = content ? (content.length > 180 ? content.slice(0, 180) + '…' : content) : (message?.is_system ? '系统消息' : '（此楼没有可预览的文字）');
             return `
                 <button class="parallel-story-floor-row" data-action="jump-floor" data-index="${index}">
