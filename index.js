@@ -52,16 +52,16 @@
         const raw = String(value ?? '');
 
         // Explicit content blocks take priority over other preset-specific wrappers.
-        const contentMatch = raw.match(/<content\\b[^>]*>([\\s\\S]*?)<\\/content\\s*>/i);
+        const contentMatch = raw.match(/<content\b[^>]*>([\s\S]*?)<\/content\s*>/i);
         if (contentMatch) return contentMatch[1].trim();
 
         // Some presets wrap internal reasoning in <draft> and use --> as
         // the boundary before the actual user-facing response.
-        const draftStart = raw.search(/<draft\\b[^>]*>/i);
+        const draftStart = raw.search(/<draft\b[^>]*>/i);
         if (draftStart >= 0) {
             const separator = raw.indexOf('-->', draftStart);
             if (separator >= 0) {
-                return raw.slice(separator + 3).replace(/<\\/draft\\s*>/gi, '').trim();
+                return raw.slice(separator + 3).replace(/<\/draft\s*>/gi, '').trim();
             }
             // Never expose an unfinished draft/COT block as the floor preview.
             return raw.slice(0, draftStart).trim();
@@ -69,6 +69,7 @@
 
         return raw.trim();
     }
+
     function makeId() {
         return window.crypto?.randomUUID?.()
             ?? `ps-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
