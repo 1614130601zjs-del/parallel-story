@@ -201,6 +201,24 @@
         const branchFloors = branchMessages.slice(1);
         const sharedLength = Math.min(parentFloors.length, branchFloors.length);
 
+        // A branch with no new messages is a snapshot of the source chat up to
+        // its final copied floor. AI text may differ after regeneration, so use
+        // the stable send timestamp and speaker identity of that final floor
+        // before considering any body-text differences in earlier messages.
+        if (branchFloors.length > 0 && branchFloors.length <= parentFloors.length) {
+            const lastIndex = branchFloors.length - 1;
+            const parentLast = parentFloors[lastIndex];
+            const branchLast = branchFloors[lastIndex];
+            const parentDate = String(parentLast?.send_date ?? '').trim();
+            const branchDate = String(branchLast?.send_date ?? '').trim();
+            const sameSpeaker = Boolean(parentLast?.is_user) === Boolean(branchLast?.is_user)
+                && Boolean(parentLast?.is_system) === Boolean(branchLast?.is_system)
+                && String(parentLast?.name ?? '') === String(branchLast?.name ?? '');
+            if (parentDate && parentDate === branchDate && sameSpeaker) {
+                return lastIndex;
+            }
+        }
+
         for (let floorIndex = 0; floorIndex < sharedLength; floorIndex++) {
             if (getBranchMessageSignature(parentFloors[floorIndex]) !== getBranchMessageSignature(branchFloors[floorIndex])) {
                 // The branch starts at the first changed floor; its source is
@@ -345,7 +363,7 @@
             // Older recovery builds may already have saved the branch index with
             // sourceMessageId=null. Retry those records instead of treating the
             // incomplete index as fully recovered.
-            if (existingBranch && existingBranch.sourceMessageId != null) continue;
+            if (existingBranch && existingBranch.sourceMessageId != null && !existingBranch.recoveredByContentDiff) continue;
             const sourceChatFile = normalizeChatFile(entry.nativeMainChat);
             let sourceMessageId = null;
             let recoveredByContentDiff = false;
