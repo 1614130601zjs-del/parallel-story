@@ -2,7 +2,13 @@
 
 SillyTavern extension: a native chat-record manager with optional parallel-story branch creation.
 
-## 1.4.0
+## 1.5.0
+
+- Replaces the all-characters-expanded view with a character-card picker. Select one character to view only that character's native chats and branches.
+- Adds confirmed deletion for ordinary native chat records. The active chat cannot be deleted; deletion uses SillyTavern's native chat-delete endpoint and refreshes the manager.
+- Keeps branch deletion, native rename, JSONL export, per-character import, and per-message branch creation.
+
+# 1.4.0
 
 - Adds a small branch icon to each rendered chat message action row. Clicking it creates a native SillyTavern branch from that exact message, records the branch metadata, and opens the new branch chat.
 - Keeps the manager's create-branch action as a shortcut for branching from the latest message.
@@ -20,7 +26,7 @@ SillyTavern extension: a native chat-record manager with optional parallel-story
 - Groups records by character, then lists that character's native chat files.
 - Marks records created as parallel-story branches and stores only branch metadata in extension settings.
 - Allows opening ordinary chats and branches; branches can be renamed.
-- Deleting a branch also deletes its corresponding native SillyTavern chat file after confirmation. Ordinary chat entries do not expose a delete action.
+- Deleting a branch also deletes its corresponding native SillyTavern chat file after confirmation. Ordinary chat deletion was added in 1.5.0.
 - Branch creation currently uses the latest message in the active chat. Creating from a pinned/arbitrary floor is a later step.
 
 ## Storage
