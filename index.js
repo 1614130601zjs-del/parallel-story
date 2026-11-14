@@ -51,21 +51,21 @@
     function stripAuxiliaryFloorContent(value) {
         return String(value ?? '')
             // Prompt notes, progress counters, and other HTML comments.
-            .replace(/<!--[\\s\\S]*?-->/g, '')
+            .replace(/<!--[\s\S]*?-->/g, '')
             // Non-story padding used to prevent premature response truncation.
-            .replace(/<pour\\b[^>]*>[\\s\\S]*?<\\/pour\\s*>/gi, '')
+            .replace(/<pour\b[^>]*>[\s\S]*?<\/pour\s*>/gi, '')
             // Image-planning instructions and generated image metadata.
-            .replace(/<imgthink\\b[^>]*>[\\s\\S]*?<\\/imgthink\\s*>/gi, '')
-            .replace(/<img-title\\b[^>]*>[\\s\\S]*?<\\/img-title\\s*>/gi, '')
-            .replace(/image###[\\s\\S]*?###/gi, '')
+            .replace(/<imgthink\b[^>]*>[\s\S]*?<\/imgthink\s*>/gi, '')
+            .replace(/<img-title\b[^>]*>[\s\S]*?<\/img-title\s*>/gi, '')
+            .replace(/image###[\s\S]*?###/gi, '')
             // Variable patches and suggested action menus are not story text.
-            .replace(/<UpdateVariable\\b[^>]*>[\\s\\S]*?<\\/UpdateVariable\\s*>/gi, '')
-            .replace(/<ActionChoices\\b[^>]*>[\\s\\S]*?<\\/ActionChoices\\s*>/gi, '')
+            .replace(/<UpdateVariable\b[^>]*>[\s\S]*?<\/UpdateVariable\s*>/gi, '')
+            .replace(/<ActionChoices\b[^>]*>[\s\S]*?<\/ActionChoices\s*>/gi, '')
             // Easter-egg chat room payloads.
-            .replace(/eggroom###[\\s\\S]*?###/gi, '')
-            .replace(/eggmsg###[\\s\\S]*?###/gi, '')
+            .replace(/eggroom###[\s\S]*?###/gi, '')
+            .replace(/eggmsg###[\s\S]*?###/gi, '')
             .replace(/eggend###/gi, '')
-            .replace(/\\n[ \\t]*\\n(?:[ \\t]*\\n)+/g, '\\n\\n')
+            .replace(/\n[ \t]*\n(?:[ \t]*\n)+/g, '\n\n')
             .trim();
     }
 
@@ -74,17 +74,17 @@
         let content = raw;
 
         // Explicit content blocks take priority over other preset-specific wrappers.
-        const contentMatch = raw.match(/<content\\b[^>]*>([\\s\\S]*?)<\\/content\\s*>/i);
+        const contentMatch = raw.match(/<content\b[^>]*>([\s\S]*?)<\/content\s*>/i);
         if (contentMatch) {
             content = contentMatch[1];
         } else {
             // Some presets wrap internal reasoning in <draft> and use --> as
             // the boundary before the actual user-facing response.
-            const draftStart = raw.search(/<draft\\b[^>]*>/i);
+            const draftStart = raw.search(/<draft\b[^>]*>/i);
             if (draftStart >= 0) {
                 const separator = raw.indexOf('-->', draftStart);
                 if (separator >= 0) {
-                    content = raw.slice(separator + 3).replace(/<\\/draft\\s*>/gi, '');
+                    content = raw.slice(separator + 3).replace(/<\/draft\s*>/gi, '');
                 } else {
                     // Never expose an unfinished draft/COT block as the floor preview.
                     content = raw.slice(0, draftStart);
