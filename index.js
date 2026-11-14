@@ -152,8 +152,8 @@
 
     async function collectChatEntries() {
         const context = getContext();
-        if (!context?.characters) {
-            throw new Error('当前酒馆没有提供角色列表，无法读取聊天记录');
+        if (!Array.isArray(context?.characters) || context.characters.length === 0) {
+            throw new Error('酒馆角色卡列表尚未加载完成，稍后会重新读取聊天记录');
         }
         const { getRequestHeaders } = await loadNativeApis();
         if (typeof getRequestHeaders !== 'function') {
@@ -869,10 +869,25 @@
     function init() {
         installMenuEntry();
         installMessageBranchButtons();
-        // Warm the native chat-list cache once when the extension starts.
-        getCachedChatEntries().catch((error) => {
-            console.warn('[平行叙事] 启动时预加载聊天记录失败，打开管理器时将重试：', error);
-        });
+        // Wait for SillyTavern to finish loading character cards before caching chats.
+        // An early empty character list must never become a permanent empty cache.
+        const preloadChatsWhenReady = async () => {
+            const deadline = Date.now() + 60000;
+            while (Date.now() < deadline) {
+                const characters = getContext()?.characters;
+                if (Array.isArray(characters) && characters.length > 0) {
+                    try {
+                        await getCachedChatEntries();
+                    } catch (error) {
+                        console.warn('[平行叙事] 启动时预加载聊天记录失败，打开管理器时将重试：', error);
+                    }
+                    return;
+                }
+                await new Promise((resolve) => setTimeout(resolve, 250));
+            }
+            console.warn('[平行叙事] 等待酒馆角色卡列表超时；打开管理器时会重新读取聊天记录。');
+        };
+        preloadChatsWhenReady();
         const observer = new MutationObserver(() => {
             installMenuEntry();
             installMessageBranchButtons();
