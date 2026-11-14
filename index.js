@@ -162,7 +162,7 @@
             characterName: String(character.name ?? '未命名角色'),
             characterAvatar: String(character.avatar),
             fileName: normalizeChatFile(item.file_name),
-            lastMessage: item.last_mes ?? '',
+            lastActivityAt: item.last_mes ?? 0,
         }));
     }
 
@@ -470,19 +470,33 @@
             error: entries.find((entry) => entry.characterId === String(index) && entry.error)?.error,
         })).filter((item) => item.character?.avatar);
 
-        // Keep characters with saved chats above empty ones, and pin the
-        // character belonging to the currently active conversation.
+        // Keep the active character pinned, then sort other characters by
+        // the modification time of their newest native chat file.
         const currentScope = getCurrentScope(context);
+        const getActivityTime = (entry) => {
+            const value = entry?.lastActivityAt;
+            if (typeof value === 'number' && Number.isFinite(value)) return value;
+            const parsed = Date.parse(value);
+            return Number.isFinite(parsed) ? parsed : 0;
+        };
+        characters.forEach((item, index) => {
+            item.originalOrder = index;
+            item.latestChatAt = item.chats.reduce(
+                (latest, entry) => Math.max(latest, getActivityTime(entry)),
+                0,
+            );
+        });
         characters.sort((a, b) => {
-            const aHasChats = a.chats.length > 0;
-            const bHasChats = b.chats.length > 0;
-            if (aHasChats !== bHasChats) return aHasChats ? -1 : 1;
-
             const aIsCurrent = a.id === currentScope.characterId;
             const bIsCurrent = b.id === currentScope.characterId;
             if (aIsCurrent !== bIsCurrent) return aIsCurrent ? -1 : 1;
 
-            return 0;
+            const aHasChats = a.chats.length > 0;
+            const bHasChats = b.chats.length > 0;
+            if (aHasChats !== bHasChats) return aHasChats ? -1 : 1;
+
+            if (a.latestChatAt !== b.latestChatAt) return b.latestChatAt - a.latestChatAt;
+            return a.originalOrder - b.originalOrder;
         });
 
         const list = root.querySelector('.parallel-story-list');
