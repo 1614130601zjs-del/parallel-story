@@ -1016,3 +1016,120 @@
 .parallel-story-source-jump:active {
     background: rgba(128, 128, 128, .14);
 }
+
+
+/* Clean black / white / light-gray palette: keep Tavern theme colors out. */
+.parallel-story-panel {
+    color: #171717 !important;
+    background: #ffffff !important;
+    border: 1px solid #d8d8d8 !important;
+    border-radius: 4px !important;
+    box-shadow: 0 18px 56px rgba(0, 0, 0, .22) !important;
+}
+.parallel-story-header,
+.parallel-story-toolbar,
+.parallel-story-footer {
+    color: #171717 !important;
+    border-color: #e4e4e4 !important;
+}
+.parallel-story-title,
+.parallel-story-character-name,
+.parallel-story-native-title .select_chat_block_filename {
+    color: #111111 !important;
+}
+.parallel-story-subtitle,
+.parallel-story-footer,
+.parallel-story-item-meta,
+.parallel-story-count,
+.parallel-story-character-count,
+.parallel-story-character-arrow,
+.parallel-story-native-meta,
+.parallel-story-branch-source,
+.parallel-story-group-count {
+    color: #777777 !important;
+}
+.parallel-story-icon-button,
+.parallel-story-back,
+.parallel-story-actions button {
+    color: #333333 !important;
+    border-radius: 2px !important;
+}
+.parallel-story-icon-button:hover,
+.parallel-story-actions button:hover,
+.parallel-story-back:hover {
+    color: #111111 !important;
+    background: #f1f1f1 !important;
+}
+.parallel-story-list {
+    background: #ffffff !important;
+}
+.parallel-story-character-card,
+.parallel-story-native-chat-item.select_chat_block_wrapper {
+    color: #171717 !important;
+    background: #ffffff !important;
+    border: 1px solid #dedede !important;
+    border-radius: 3px !important;
+    box-shadow: none !important;
+}
+.parallel-story-character-card:hover,
+.parallel-story-native-chat-item.select_chat_block_wrapper > .parallel-story-native-block:hover {
+    background: #f7f7f7 !important;
+}
+.parallel-story-character-avatar,
+.parallel-story-selected-character img {
+    border-radius: 2px !important;
+    background: #f0f0f0 !important;
+}
+.parallel-story-native-chat-item.select_chat_block_wrapper > .parallel-story-native-block {
+    color: #171717 !important;
+    background: #ffffff !important;
+}
+.parallel-story-native-chat-item.select_chat_block_wrapper > .parallel-story-native-block.is-current,
+.parallel-story-native-chat-item.select_chat_block_wrapper > .parallel-story-native-block.is-current:hover {
+    color: #111111 !important;
+    background: #ededed !important;
+    border-color: transparent !important;
+}
+.parallel-story-native-chat-item .select_chat_block_mes {
+    color: #333333 !important;
+}
+.parallel-story-native-chat-item .parallel-story-svg-action {
+    color: #333333 !important;
+    opacity: .82 !important;
+}
+.parallel-story-native-chat-item .parallel-story-svg-action:hover {
+    color: #000000 !important;
+    background: #eeeeee !important;
+}
+.parallel-story-group-switch {
+    border: 1px solid #dedede !important;
+    border-radius: 3px !important;
+    background: #ffffff !important;
+}
+.parallel-story-group-tab {
+    color: #555555 !important;
+    border-radius: 2px !important;
+}
+.parallel-story-group-tab.is-active {
+    color: #ffffff !important;
+    background: #171717 !important;
+    font-weight: 600 !important;
+}
+.parallel-story-group-tab span {
+    opacity: .78 !important;
+}
+.parallel-story-source-jump {
+    color: #171717 !important;
+    border: 1px solid #bdbdbd !important;
+    border-radius: 2px !important;
+    background: #ffffff !important;
+    opacity: 1 !important;
+}
+.parallel-story-source-jump:hover {
+    color: #ffffff !important;
+    border-color: #171717 !important;
+    background: #171717 !important;
+}
+.parallel-story-empty {
+    color: #333333 !important;
+}
