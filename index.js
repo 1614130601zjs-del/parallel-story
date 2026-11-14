@@ -390,9 +390,10 @@
             if (!confirmed) return;
 
             try {
+                const { getRequestHeaders } = await loadNativeApis();
                 const response = await fetch('/api/chats/delete', {
                     method: 'POST',
-                    headers: context.getRequestHeaders(),
+                    headers: getRequestHeaders(),
                     body: JSON.stringify({
                         chatfile: `${branchFile}.jsonl`,
                         avatar_url: owner.character.avatar,
