@@ -258,6 +258,113 @@
         document.getElementById(ROOT_ID)?.remove();
     }
 
+    function renderFloorPage(root) {
+        const list = root.querySelector('.parallel-story-list');
+        if (!list) return;
+        const all = root._floorData || [];
+        const query = String(root._floorQuery || '').trim().toLowerCase();
+        const filtered = all.filter((message, index) => {
+            if (!query) return true;
+            const text = [index + 1, message?.name, message?.mes, message?.is_user ? '用户 user' : '角色 assistant'].join(' ').toLowerCase();
+            return text.includes(query);
+        });
+        const pageSize = 40;
+        const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+        root._floorPage = Math.min(Math.max(0, root._floorPage || 0), pageCount - 1);
+        const start = root._floorPage * pageSize;
+        const page = filtered.slice(start, start + pageSize);
+        const entry = root._floorEntry;
+        const context = getContext();
+        const character = getCharacter(context, entry.characterId);
+        const heading = `
+            <div class="parallel-story-floor-heading">
+                <button class="parallel-story-back" data-action="back-floor-chat">‹ 返回聊天记录</button>
+                <div class="parallel-story-selected-character">
+                    <img src="/characters/${encodeURIComponent(entry.characterAvatar)}" alt="">
+                    <span>${escapeHtml(character?.name || entry.characterName)} · 楼层目录</span>
+                </div>
+            </div>
+            <input class="parallel-story-floor-search" type="search" placeholder="搜索楼层编号或消息内容…" value="${escapeHtml(root._floorQuery || '')}">
+            <div class="parallel-story-floor-summary">共 ${all.length} 楼 · 显示 ${filtered.length} 条匹配记录</div>`;
+        const rows = page.map((message) => {
+            const index = all.indexOf(message);
+            const who = message?.is_system ? '系统' : message?.is_user ? '用户' : (message?.name || entry.characterName || '角色');
+            const content = String(message?.mes ?? '').replace(/\\s+/g, ' ').trim();
+            const preview = content ? (content.length > 180 ? content.slice(0, 180) + '…' : content) : (message?.is_system ? '系统消息' : '（此楼没有可预览的文字）');
+            return `
+                <button class="parallel-story-floor-row" data-action="jump-floor" data-index="${index}">
+                    <span class="parallel-story-floor-number">${index + 1}</span>
+                    <span class="parallel-story-floor-content">
+                        <span class="parallel-story-floor-author">${escapeHtml(who)}</span>
+                        <span class="parallel-story-floor-preview">${escapeHtml(preview)}</span>
+                    </span>
+                    <span class="parallel-story-floor-arrow">›</span>
+                </button>`;
+        }).join('');
+        const pager = `
+            <div class="parallel-story-floor-pager">
+                <button data-action="floor-page" data-page="${root._floorPage - 1}" ${root._floorPage <= 0 ? 'disabled' : ''}>上一页</button>
+                <span>第 ${root._floorPage + 1} / ${pageCount} 页</span>
+                <button data-action="floor-page" data-page="${root._floorPage + 1}" ${root._floorPage >= pageCount - 1 ? 'disabled' : ''}>下一页</button>
+            </div>`;
+        list.innerHTML = heading + (rows || '<div class="parallel-story-empty">没有找到匹配的楼层</div>') + pager;
+        const search = list.querySelector('.parallel-story-floor-search');
+        search?.addEventListener('input', () => {
+            root._floorQuery = search.value;
+            root._floorPage = 0;
+            const position = search.selectionStart;
+            renderFloorPage(root);
+            const next = list.querySelector('.parallel-story-floor-search');
+            next?.focus();
+            try { next?.setSelectionRange(position, position); } catch (_) {}
+        });
+    }
+
+    async function showFloorPicker(root, entry) {
+        const list = root.querySelector('.parallel-story-list');
+        const count = root.querySelector('.parallel-story-count');
+        if (list) list.innerHTML = '<div class="parallel-story-empty">正在读取这份聊天的楼层…</div>';
+        if (count) count.textContent = '读取楼层中…';
+        try {
+            const { getRequestHeaders } = await loadNativeApis();
+            const response = await fetch('/api/chats/get', {
+                method: 'POST',
+                headers: getRequestHeaders(),
+                cache: 'no-cache',
+                body: JSON.stringify({
+                    ch_name: entry.characterName,
+                    file_name: normalizeChatFile(entry.fileName),
+                    avatar_url: entry.characterAvatar,
+                }),
+            });
+            if (!response.ok) throw new Error(`读取聊天楼层失败（${response.status}）`);
+            const messages = await response.json();
+            if (!Array.isArray(messages)) throw new Error('酒馆返回的聊天内容格式不正确');
+            root._floorEntry = entry;
+            root._floorData = messages;
+            root._floorQuery = '';
+            root._floorPage = Math.max(0, Math.ceil(messages.length / 40) - 1);
+            if (count) count.textContent = `${messages.length} 楼`;
+            renderFloorPage(root);
+        } catch (error) {
+            console.error('[平行叙事] 读取楼层目录失败：', error);
+            if (list) list.innerHTML = `<div class="parallel-story-empty">${escapeHtml(error?.message || '读取楼层目录失败')}</div>`;
+            if (count) count.textContent = '读取失败';
+        }
+    }
+
+    async function jumpToNativeFloor(entry, messageIndex) {
+        const context = getContext();
+        const { selectCharacterById, openCharacterChat } = await loadNativeApis();
+        await selectCharacterById(Number(entry.characterId), { switchMenu: false });
+        await openCharacterChat(normalizeChatFile(entry.fileName));
+        const slashContext = await import('/scripts/st-context.js');
+        if (typeof slashContext.executeSlashCommandsWithOptions !== 'function') {
+            throw new Error('当前酒馆没有提供原生楼层跳转命令接口');
+        }
+        await slashContext.executeSlashCommandsWithOptions(`/chat-jump ${Number(messageIndex)}`);
+    }
+
     function renderCharacterCards(root, entries) {
         const context = getContext();
         const characters = (context?.characters ?? []).map((character, index) => ({
@@ -543,17 +650,41 @@
         }
 
         if (action === 'open-chat') {
+            const root = document.getElementById(ROOT_ID);
+            const entry = (root?._entries || []).find((item) =>
+                item.characterId === button.dataset.characterId
+                && item.fileName === normalizeChatFile(button.dataset.file)
+            );
+            if (root && entry) await showFloorPicker(root, entry);
+            return;
+        }
+
+        if (action === 'back-floor-chat') {
+            const root = document.getElementById(ROOT_ID);
+            if (root) renderCharacterChats(root, root._entries || [], root._floorEntry.characterId);
+            return;
+        }
+
+        if (action === 'floor-page') {
+            const root = document.getElementById(ROOT_ID);
+            if (root) {
+                root._floorPage = Number(button.dataset.page);
+                renderFloorPage(root);
+            }
+            return;
+        }
+
+        if (action === 'jump-floor') {
+            const root = document.getElementById(ROOT_ID);
+            const entry = root?._floorEntry;
+            const messageIndex = Number(button.dataset.index);
+            if (!entry || !Number.isInteger(messageIndex) || messageIndex < 0) return;
             try {
-                const context = getContext();
-                const { selectCharacterById, openCharacterChat } = await loadNativeApis();
-                const characterId = button.dataset.characterId;
-                const fileName = button.dataset.file;
-                await selectCharacterById(Number(characterId), { switchMenu: false });
-                await openCharacterChat(fileName);
+                await jumpToNativeFloor(entry, messageIndex);
                 closeManager();
             } catch (error) {
-                console.error('[平行叙事] 打开聊天记录失败：', error);
-                showNotice(error?.message ?? '无法打开这份聊天记录。', 'error');
+                console.error('[平行叙事] 跳转楼层失败：', error);
+                showNotice(error?.message || '无法跳转到指定楼层。', 'error');
             }
             return;
         }
