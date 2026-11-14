@@ -1,16 +1,20 @@
 .parallel-story-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 10050;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 10050 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
     padding: 18px;
     background: rgba(18, 20, 23, .48);
     backdrop-filter: blur(5px);
 }
 
 .parallel-story-panel {
+    position: relative !important;
+    inset: auto !important;
+    flex: 0 1 auto;
+    margin: auto !important;
     display: flex;
     flex-direction: column;
     width: min(520px, 100%);
@@ -177,8 +181,9 @@
 
 @media (max-width: 480px) {
     .parallel-story-backdrop {
-        align-items: flex-end;
-        padding: 8px;
+        align-items: center !important;
+        justify-content: center !important;
+        padding: 12px !important;
     }
 
     .parallel-story-panel {
