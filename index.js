@@ -327,9 +327,9 @@
                     <div class="parallel-story-actions">
                         <button data-action="rename-chat" data-character-id="${escapeHtml(entry.characterId)}" data-avatar="${escapeHtml(entry.characterAvatar)}" data-file="${escapeHtml(entry.fileName)}" title="重命名原生聊天记录">改名</button>
                         <button data-action="export-chat" data-avatar="${escapeHtml(entry.characterAvatar)}" data-file="${escapeHtml(entry.fileName)}" title="导出原生 JSONL">导出</button>
-                        ${isBranch && branchMeta?.id
+                        ${!active && isBranch && branchMeta?.id
                             ? `<button data-action="delete-branch" data-id="${escapeHtml(branchMeta.id)}" title="删除分支及原生聊天">删除</button>`
-                            : !active ? `<button data-action="delete-chat" data-character-id="${escapeHtml(entry.characterId)}" data-avatar="${escapeHtml(entry.characterAvatar)}" data-file="${escapeHtml(entry.fileName)}" title="删除原生聊天记录">删除</button>` : ''}
+                            : !active && !isBranch ? `<button data-action="delete-chat" data-character-id="${escapeHtml(entry.characterId)}" data-avatar="${escapeHtml(entry.characterAvatar)}" data-file="${escapeHtml(entry.fileName)}" title="删除原生聊天记录">删除</button>` : ''}
                     </div>
                 </article>`;
         }).join('');
