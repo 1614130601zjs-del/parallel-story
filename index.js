@@ -38,45 +38,124 @@
         if (typeof bookmarks.createBranch !== 'function') {
             throw new Error('当前酒馆版本没有提供可用的原生 createBranch API');
         }
-        const openChat = script.openCharacterChat
-            ?? window.openCharacterChat
-            ?? getContext()?.openCharacterChat;
-        if (typeof openChat !== 'function') {
-            throw new Error('当前酒馆版本没有找到 openCharacterChat API');
-        }
-        return { createBranch: bookmarks.createBranch, openCharacterChat: openChat };
+        return {
+            createBranch: bookmarks.createBranch,
+            openCharacterChat: script.openCharacterChat,
+            selectCharacterById: script.selectCharacterById,
+            deleteCharacterChatByName: script.deleteCharacterChatByName,
+        };
     }
 
     function getCurrentChatFile(context) {
-        // SillyTavern context.chatId is the active character's current chat filename.
-        return context?.chatId
-            ?? context?.getCurrentChatId?.()
-            ?? '';
+        return context?.chatId ?? context?.getCurrentChatId?.() ?? '';
+    }
+
+    function getCharacter(context, characterId) {
+        return context?.characters?.[Number(characterId)] ?? null;
     }
 
     function getCurrentScope(context = getContext()) {
         const characterId = context?.characterId;
-        const characterName = context?.name2 || '未知角色';
-        const chatFile = getCurrentChatFile(context);
+        const character = getCharacter(context, characterId);
         return {
             characterId: characterId == null ? '' : String(characterId),
-            characterName: String(characterName),
-            chatFile: String(chatFile || ''),
+            characterName: String(character?.name ?? context?.name2 ?? '未知角色'),
+            characterAvatar: String(character?.avatar ?? ''),
+            chatFile: String(getCurrentChatFile(context) || ''),
         };
+    }
+
+    function getBranchCharacter(branch, context = getContext()) {
+        if (branch.sourceCharacterAvatar) {
+            const index = context?.characters?.findIndex((item) => item?.avatar === branch.sourceCharacterAvatar);
+            if (index >= 0) return { id: String(index), character: context.characters[index] };
+        }
+        const id = branch.sourceCharacterId;
+        const character = getCharacter(context, id);
+        return character ? { id: String(id), character } : null;
     }
 
     function getCurrentBranchId() {
         const scope = getCurrentScope();
         return getStore().branches.find((item) =>
             item.chatFile === scope.chatFile
-            && String(item.sourceCharacterId ?? '') === scope.characterId
+            && (item.sourceCharacterAvatar
+                ? item.sourceCharacterAvatar === scope.characterAvatar
+                : String(item.sourceCharacterId ?? '') === scope.characterId)
         )?.id ?? null;
     }
 
-    function getBranchGroupKey(branch) {
-        const characterId = branch.sourceCharacterId ?? '';
-        const chatFile = branch.sourceChatFile ?? branch.sourceChat ?? '';
-        return JSON.stringify([String(characterId), String(chatFile)]);
+    function normalizeChatFile(fileName) {
+        return String(fileName ?? '').replace(/\\.jsonl$/i, '');
+    }
+
+    function getBranchForChat(character, fileName) {
+        const normalized = normalizeChatFile(fileName);
+        return getStore().branches.find((branch) =>
+            normalizeChatFile(branch.chatFile) === normalized
+            && (branch.sourceCharacterAvatar
+                ? branch.sourceCharacterAvatar === character.avatar
+                : false)
+        ) ?? null;
+    }
+
+    async function fetchCharacterChats(context, character, characterId) {
+        if (!character?.avatar) return [];
+        const response = await fetch('/api/characters/chats', {
+            method: 'POST',
+            headers: context.getRequestHeaders?.() ?? { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ avatar_url: character.avatar }),
+        });
+        if (!response.ok) throw new Error(`读取「${character.name}」聊天记录失败（${response.status}）`);
+        const data = await response.json();
+        if (data?.error === true) throw new Error(`酒馆无法读取「${character.name}」的聊天记录`);
+        return Object.values(data).filter((item) => item?.file_name).map((item) => ({
+            characterId: String(characterId),
+            characterName: String(character.name ?? '未命名角色'),
+            characterAvatar: String(character.avatar),
+            fileName: normalizeChatFile(item.file_name),
+            lastMessage: item.last_mes ?? '',
+        }));
+    }
+
+    async function collectChatEntries() {
+        const context = getContext();
+        if (!context?.characters || typeof context.getRequestHeaders !== 'function') {
+            throw new Error('当前酒馆没有提供读取角色聊天记录所需的接口');
+        }
+
+        const all = await Promise.all(context.characters.map(async (character, index) => {
+            if (!character?.avatar) return [];
+            try {
+                return await fetchCharacterChats(context, character, index);
+            } catch (error) {
+                console.warn('[平行叙事] 读取角色聊天记录失败：', character?.name, error);
+                return [{ error: error.message, characterId: String(index), characterName: character?.name ?? '未知角色' }];
+            }
+        }));
+
+        const entries = all.flat();
+        const seen = new Set(entries.filter((item) => item.fileName).map((item) =>
+            JSON.stringify([item.characterAvatar, item.fileName])
+        ));
+
+        // Keep indexed branch records visible even if the native chat list did not return them.
+        for (const branch of getStore().branches) {
+            const owner = getBranchCharacter(branch, context);
+            if (!owner?.character?.avatar) continue;
+            const fileName = normalizeChatFile(branch.chatFile);
+            const key = JSON.stringify([owner.character.avatar, fileName]);
+            if (seen.has(key)) continue;
+            entries.push({
+                characterId: owner.id,
+                characterName: owner.character.name ?? branch.sourceCharacterName ?? '未知角色',
+                characterAvatar: owner.character.avatar,
+                fileName,
+                missingFromNativeList: true,
+            });
+            seen.add(key);
+        }
+        return entries;
     }
 
     function showNotice(message, type = 'info') {
