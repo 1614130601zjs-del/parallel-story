@@ -226,6 +226,20 @@
         return Number.isFinite(parsed) ? parsed : 0;
     }
 
+    function formatLastMessageTime(timestamp) {
+        const numeric = Number(timestamp);
+        if (!Number.isFinite(numeric) || numeric <= 0) return '';
+        const date = new Date(numeric < 1e12 ? numeric * 1000 : numeric);
+        if (Number.isNaN(date.getTime())) return '';
+        return new Intl.DateTimeFormat(undefined, {
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+        }).format(date);
+    }
+
     async function fetchChatLastMessageInfo(entry, getRequestHeaders) {
         try {
             const response = await fetch('/api/chats/get', {
@@ -665,7 +679,10 @@
                 <article class="parallel-story-item${active ? ' is-active' : ''}">
                     <button class="parallel-story-open" data-action="open-chat" data-character-id="${escapeHtml(entry.characterId)}" data-file="${escapeHtml(entry.fileName)}">
                         <span class="parallel-story-item-name">${escapeHtml(title)}</span>
-                        <span class="parallel-story-item-meta">${escapeHtml(detail)} · ${Number(entry.messageCount || 0)} 条消息${active ? ' · 当前聊天' : ''}</span>
+                        <span class="parallel-story-item-meta">
+                            <span>${escapeHtml(detail)} · ${Number(entry.messageCount || 0)} 条消息${active ? ' · 当前聊天' : ''}</span>
+                            ${entry.latestMessageAt ? `<time class="parallel-story-last-time" datetime="${escapeHtml(new Date(Number(entry.latestMessageAt) < 1e12 ? Number(entry.latestMessageAt) * 1000 : Number(entry.latestMessageAt)).toISOString())}">最后消息 ${escapeHtml(formatLastMessageTime(entry.latestMessageAt))}</time>` : ''}
+                        </span>
                         <span class="parallel-story-last-message">
                             ${entry.latestMessageAuthor ? `<span class="parallel-story-last-author">${escapeHtml(entry.latestMessageAuthor)}：</span>` : ''}
                             ${escapeHtml(entry.latestMessagePreview || '（暂无可预览的消息）')}
