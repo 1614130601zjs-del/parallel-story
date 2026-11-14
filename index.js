@@ -308,6 +308,7 @@
                 parentId: getCurrentBranchId(),
                 sourceCharacterId: sourceScope.characterId,
                 sourceCharacterName: sourceScope.characterName,
+                sourceCharacterAvatar: sourceScope.characterAvatar,
                 sourceChatFile: sourceScope.chatFile,
                 // Keep the old field for compatibility with existing local indexes.
                 sourceChat: sourceScope.chatFile,
@@ -335,18 +336,24 @@
 
         if (action === 'close') return closeManager();
         if (action === 'create') return createCurrentBranch();
-        if (!branch) return;
 
-        if (action === 'open') {
+        if (action === 'open-chat') {
             try {
-                const { openCharacterChat } = await loadNativeApis();
-                await openCharacterChat(branch.chatFile);
+                const context = getContext();
+                const { selectCharacterById, openCharacterChat } = await loadNativeApis();
+                const characterId = button.dataset.characterId;
+                const fileName = button.dataset.file;
+                await selectCharacterById(Number(characterId), { switchMenu: false });
+                await openCharacterChat(fileName);
                 closeManager();
             } catch (error) {
-                console.error('[平行叙事] 打开分支失败：', error);
-                showNotice(error?.message ?? '无法打开这条原生聊天记录。', 'error');
+                console.error('[平行叙事] 打开聊天记录失败：', error);
+                showNotice(error?.message ?? '无法打开这份聊天记录。', 'error');
             }
+            return;
         }
+
+        if (!branch) return;
 
         if (action === 'rename') {
             const nextName = window.prompt('修改分支名称：', branch.name)?.trim();
@@ -354,14 +361,57 @@
             branch.name = nextName;
             saveStore();
             renderManager();
+            return;
         }
 
-        if (action === 'remove') {
-            const confirmed = window.confirm('只从平行叙事管理器中移除此条索引？原生聊天记录不会被删除。');
+        if (action === 'delete-branch') {
+            const context = getContext();
+            const owner = getBranchCharacter(branch, context);
+            if (!owner?.character?.avatar) {
+                showNotice('无法确定这条分支所属的角色，已停止删除以保护聊天记录。', 'error');
+                return;
+            }
+
+            const scope = getCurrentScope(context);
+            const branchFile = normalizeChatFile(branch.chatFile);
+            if (scope.characterAvatar === owner.character.avatar && scope.chatFile === branchFile) {
+                showNotice('这条分支当前正处于打开状态。请先切换到其他聊天，再删除它。', 'warning');
+                return;
+            }
+
+            const confirmed = window.confirm(
+                `确定删除分支「${branch.name}」吗？\n\n这会永久删除对应的酒馆原生聊天记录，不能通过平行叙事恢复。`
+            );
             if (!confirmed) return;
-            store.branches = store.branches.filter((item) => item.id !== id);
-            saveStore();
-            renderManager();
+
+            try {
+                const response = await fetch('/api/chats/delete', {
+                    method: 'POST',
+                    headers: context.getRequestHeaders(),
+                    body: JSON.stringify({
+                        chatfile: `${branchFile}.jsonl`,
+                        avatar_url: owner.character.avatar,
+                    }),
+                });
+                if (!response.ok) {
+                    throw new Error(`酒馆删除聊天文件失败（${response.status}）`);
+                }
+
+                if (context.eventSource && context.eventTypes?.CHAT_DELETED) {
+                    await context.eventSource.emit(context.eventTypes.CHAT_DELETED, branchFile);
+                }
+                store.branches = store.branches.filter((item) => item.id !== id);
+                // Children remain available, but are no longer shown as descendants of a deleted parent.
+                for (const child of store.branches) {
+                    if (child.parentId === id) child.parentId = null;
+                }
+                saveStore();
+                await renderManager();
+                showNotice('分支及对应的原生聊天记录已删除。', 'success');
+            } catch (error) {
+                console.error('[平行叙事] 删除分支失败：', error);
+                showNotice(error?.message ?? '删除失败，索引未移除。', 'error');
+            }
         }
     }
 
