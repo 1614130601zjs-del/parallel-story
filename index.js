@@ -43,6 +43,8 @@
             openCharacterChat: script.openCharacterChat,
             selectCharacterById: script.selectCharacterById,
             deleteCharacterChatByName: script.deleteCharacterChatByName,
+            renameChat: script.renameChat,
+            importCharacterChat: script.importCharacterChat,
             getRequestHeaders: script.getRequestHeaders,
         };
     }
@@ -163,6 +165,87 @@
         return entries;
     }
 
+    async function exportNativeChat(characterAvatar, fileName) {
+        const { getRequestHeaders } = await loadNativeApis();
+        const base = normalizeChatFile(fileName);
+        const response = await fetch('/api/chats/export', {
+            method: 'POST',
+            headers: getRequestHeaders(),
+            body: JSON.stringify({ file: base + '.jsonl', avatar_url: characterAvatar, is_group: false, format: 'jsonl', exportfilename: base + '.jsonl' }),
+        });
+        if (!response.ok) throw new Error('导出聊天记录失败（' + response.status + '）');
+        const payload = await response.json();
+        if (typeof payload?.result !== 'string') throw new Error(payload?.message || '酒馆没有返回有效的 JSONL 数据');
+        const url = URL.createObjectURL(new Blob([payload.result], { type: 'application/x-ndjson;charset=utf-8' }));
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = base + '.jsonl';
+        document.body.append(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(url);
+    }
+
+    async function renameNativeChat(characterId, characterAvatar, oldFileName) {
+        const oldBase = normalizeChatFile(oldFileName);
+        const requested = window.prompt('修改原生聊天记录名称：', oldBase)?.trim();
+        if (!requested) return false;
+        const newBase = normalizeChatFile(requested).trim();
+        if (!newBase || newBase === oldBase) return false;
+        if (/[\\/]/.test(newBase)) { showNotice('名称不能包含斜杠。', 'warning'); return false; }
+        const context = getContext();
+        const scope = getCurrentScope(context);
+        let finalBase = newBase;
+        if (scope.characterAvatar === characterAvatar && scope.chatFile === oldBase) {
+            if (typeof context?.renameChat !== 'function') throw new Error('当前酒馆没有提供原生聊天重命名方法');
+            await context.renameChat(oldBase, newBase);
+        } else {
+            const { getRequestHeaders } = await loadNativeApis();
+            const response = await fetch('/api/chats/rename', {
+                method: 'POST', headers: getRequestHeaders(),
+                body: JSON.stringify({ original_file: oldBase + '.jsonl', renamed_file: newBase + '.jsonl', avatar_url: characterAvatar, is_group: false }),
+            });
+            if (!response.ok) throw new Error('酒馆重命名失败（' + response.status + '）');
+            const payload = await response.json().catch(() => ({}));
+            finalBase = normalizeChatFile(payload?.sanitizedFileName || newBase);
+        }
+        for (const branch of getStore().branches) {
+            const belongs = branch.sourceCharacterAvatar ? branch.sourceCharacterAvatar === characterAvatar : String(branch.sourceCharacterId ?? '') === String(characterId);
+            if (!belongs) continue;
+            if (normalizeChatFile(branch.chatFile) === oldBase) { branch.chatFile = finalBase; branch.name = finalBase; }
+            if (normalizeChatFile(branch.sourceChatFile) === oldBase) branch.sourceChatFile = finalBase;
+            if (normalizeChatFile(branch.sourceChat) === oldBase) branch.sourceChat = finalBase;
+        }
+        saveStore();
+        return true;
+    }
+
+    async function importNativeChat(file, characterId) {
+        if (!file) return;
+        const context = getContext();
+        const character = getCharacter(context, characterId);
+        if (!character?.avatar) { showNotice('无法确定导入目标角色。', 'error'); return; }
+        const extension = String(file.name.split('.').pop() || '').toLowerCase();
+        if (!['jsonl', 'json'].includes(extension)) { showNotice('酒馆原生聊天导入仅支持 JSONL 或 JSON 文件。', 'warning'); return; }
+        try {
+            const { importCharacterChat } = await loadNativeApis();
+            if (typeof importCharacterChat !== 'function') throw new Error('当前酒馆没有提供原生聊天导入方法');
+            const formData = new FormData();
+            formData.set('file_type', extension);
+            formData.set('avatar', file);
+            formData.set('avatar_url', character.avatar);
+            formData.set('user_name', context?.name1 || 'User');
+            formData.set('character_name', character.name || 'Character');
+            const imported = await importCharacterChat(formData, { refresh: false });
+            if (!Array.isArray(imported) || imported.length === 0) throw new Error('酒馆未能导入该文件，请确认文件格式正确');
+            showNotice('已导入 ' + imported.length + ' 份原生聊天记录。', 'success');
+            await renderManager();
+        } catch (error) {
+            console.error('[平行叙事] 原生聊天导入失败：', error);
+            showNotice(error?.message || '导入失败。', 'error');
+        }
+    }
+
     function showNotice(message, type = 'info') {
         if (typeof window.toastr?.[type] === 'function') {
             window.toastr[type](message, '平行叙事');
@@ -251,8 +334,9 @@
                                     <span class="parallel-story-item-meta">${escapeHtml(detail)}${active ? ' · 当前聊天' : ''}</span>
                                 </button>
                                 <div class="parallel-story-actions">
+                                    <button data-action="rename-chat" data-character-id="${escapeHtml(entry.characterId)}" data-avatar="${escapeHtml(entry.characterAvatar)}" data-file="${escapeHtml(entry.fileName)}" title="重命名原生聊天记录">改名</button>
+                                    <button data-action="export-chat" data-avatar="${escapeHtml(entry.characterAvatar)}" data-file="${escapeHtml(entry.fileName)}" title="导出原生 JSONL">导出</button>
                                     ${isBranch && branchId ? `
-                                        <button data-action="rename" data-id="${escapeHtml(branchId)}" title="重命名">改名</button>
                                         <button data-action="delete-branch" data-id="${escapeHtml(branchId)}" title="删除分支及原生聊天">删除</button>
                                     ` : ''}
                                 </div>
@@ -266,6 +350,7 @@
                             <div class="parallel-story-group-meta">
                                 ${items.length} 份聊天记录
                                 ${groupCurrent ? '<span class="parallel-story-current-tag">当前角色</span>' : ''}
+                                <button class="parallel-story-import" data-action="import-chat" data-character-id="${escapeHtml(first.characterId)}">导入聊天</button>
                             </div>
                         </header>
                         ${rows || '<div class="parallel-story-empty">暂无聊天记录</div>'}
@@ -342,6 +427,36 @@
         if (action === 'close') return closeManager();
         if (action === 'create') return createCurrentBranch();
 
+        if (action === 'import-chat') {
+            const characterId = button.dataset.characterId;
+            const picker = document.createElement('input');
+            picker.type = 'file';
+            picker.accept = '.jsonl,.json,application/json,application/x-ndjson';
+            picker.hidden = true;
+            picker.addEventListener('change', () => {
+                const selected = picker.files?.[0];
+                picker.remove();
+                if (selected) importNativeChat(selected, characterId);
+            }, { once: true });
+            document.body.append(picker);
+            picker.click();
+            return;
+        }
+
+        if (action === 'export-chat') {
+            try { await exportNativeChat(button.dataset.avatar, button.dataset.file); showNotice('原生聊天记录已导出。', 'success'); }
+            catch (error) { console.error('[平行叙事] 导出聊天记录失败：', error); showNotice(error?.message || '导出失败。', 'error'); }
+            return;
+        }
+
+        if (action === 'rename-chat') {
+            try {
+                const renamed = await renameNativeChat(button.dataset.characterId, button.dataset.avatar, button.dataset.file);
+                if (renamed) { await renderManager(); showNotice('原生聊天记录名称已更新。', 'success'); }
+            } catch (error) { console.error('[平行叙事] 重命名聊天记录失败：', error); showNotice(error?.message || '重命名失败。', 'error'); }
+            return;
+        }
+
         if (action === 'open-chat') {
             try {
                 const context = getContext();
@@ -359,15 +474,6 @@
         }
 
         if (!branch) return;
-
-        if (action === 'rename') {
-            const nextName = window.prompt('修改分支名称：', branch.name)?.trim();
-            if (!nextName) return;
-            branch.name = nextName;
-            saveStore();
-            renderManager();
-            return;
-        }
 
         if (action === 'delete-branch') {
             const context = getContext();
