@@ -659,19 +659,23 @@
         const currentKey = JSON.stringify([currentScope.characterAvatar, currentScope.chatFile]);
         const chats = entries.filter((entry) => entry.characterId === String(characterId));
         const list = root.querySelector('.parallel-story-list');
-        const count = root.querySelector('.parallel-story-count');
-        if (count) count.textContent = `${chats.filter((item) => item.fileName).length} 份聊天记录`;
-
-        const rows = chats.map((entry) => {
-            if (entry.error) return `<div class="parallel-story-chat-error">${escapeHtml(entry.error)}</div>`;
-            if (!entry.fileName) return '';
+        const selectedGroup = root.dataset.chatGroup === 'branch' ? 'branch' : 'main';
+        const classifiedChats = chats.map((entry) => {
             const branch = getBranchForChat({ avatar: entry.characterAvatar }, entry.fileName);
             const legacyBranch = !branch ? getStore().branches.find((item) =>
                 normalizeChatFile(item.chatFile) === entry.fileName
                 && !item.sourceCharacterAvatar
                 && String(item.sourceCharacterId ?? '') === entry.characterId
             ) : null;
-            const branchMeta = branch || legacyBranch;
+            return { entry, branchMeta: branch || legacyBranch };
+        });
+        const mainCount = classifiedChats.filter((item) => item.entry.fileName && !item.branchMeta).length;
+        const branchCount = classifiedChats.filter((item) => item.entry.fileName && item.branchMeta).length;
+        const visibleChats = classifiedChats.filter((item) => selectedGroup === 'branch' ? item.branchMeta : !item.branchMeta);
+
+        const rows = visibleChats.map(({ entry, branchMeta }) => {
+            if (entry.error) return `<div class="parallel-story-chat-error">${escapeHtml(entry.error)}</div>`;
+            if (!entry.fileName) return '';
             const isBranch = Boolean(branchMeta);
             const active = JSON.stringify([entry.characterAvatar, entry.fileName]) === currentKey;
             const title = branchMeta?.name ?? entry.fileName;
@@ -769,7 +773,12 @@
                 </div>
                 <button class="parallel-story-import" data-action="import-chat" data-character-id="${escapeHtml(characterId)}">导入聊天</button>
             </div>
-            ${rows || '<div class="parallel-story-empty">这个角色还没有聊天记录</div>'}`;
+            <div class="parallel-story-group-switch" role="tablist" aria-label="聊天记录分组">
+                <button class="parallel-story-group-tab${selectedGroup === 'main' ? ' is-active' : ''}" data-action="chat-group" data-group="main" role="tab" aria-selected="${selectedGroup === 'main'}">主线 <span>${mainCount}</span></button>
+                <button class="parallel-story-group-tab${selectedGroup === 'branch' ? ' is-active' : ''}" data-action="chat-group" data-group="branch" role="tab" aria-selected="${selectedGroup === 'branch'}">分支 <span>${branchCount}</span></button>
+            </div>
+            <div class="parallel-story-group-count">${selectedGroup === 'main' ? mainCount : branchCount} 份聊天记录</div>
+            ${rows || `<div class="parallel-story-empty">${selectedGroup === 'main' ? '还没有主线聊天记录' : '还没有剧情分支'}</div>`}`;
     }
 
     async function renderManager() {
@@ -787,12 +796,8 @@
                     </div>
                     <button class="parallel-story-icon-button" data-action="close" aria-label="关闭">×</button>
                 </header>
-                <div class="parallel-story-toolbar">
-                    <button class="parallel-story-primary" data-action="create">＋ 从当前聊天创建剧情分支</button>
-                    <span class="parallel-story-count">正在读取…</span>
-                </div>
                 <div class="parallel-story-list"><div class="parallel-story-empty">正在读取酒馆角色卡</div></div>
-                <footer class="parallel-story-footer">聊天正文仍由酒馆原生管理。普通聊天和剧情分支均可重命名、导出或删除；当前打开的聊天不能删除。</footer>
+                <footer class="parallel-story-footer">聊天正文仍由酒馆原生管理。主线与分支分别管理；当前打开的聊天不能删除。</footer>
             </section>`;
         root.addEventListener('click', (event) => {
             if (event.target === root) return closeManager();
@@ -805,7 +810,13 @@
             }
             if (button.dataset.action === 'back-characters') {
                 delete root.dataset.selectedCharacterId;
+                delete root.dataset.chatGroup;
                 renderCharacterCards(root, root._entries || []);
+                return;
+            }
+            if (button.dataset.action === 'chat-group') {
+                root.dataset.chatGroup = button.dataset.group === 'branch' ? 'branch' : 'main';
+                renderCharacterChats(root, root._entries || [], root.dataset.selectedCharacterId);
                 return;
             }
             handleManagerClick(event);
