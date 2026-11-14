@@ -255,8 +255,10 @@
             const messages = await response.json();
             if (!Array.isArray(messages)) return { timestamp: 0 };
 
-            // The first JSONL row is chat metadata. Reuse the same read to
-            // collect the last visible message for the character's chat list.
+            // The first JSONL row is chat metadata. Native SillyTavern branches
+            // store their parent chat name in chat_metadata.main_chat. This is
+            // the durable recovery source if the extension settings index is lost.
+            const nativeMainChat = String(messages[0]?.chat_metadata?.main_chat ?? '').trim();
             for (let index = messages.length - 1; index >= 1; index--) {
                 const message = messages[index];
                 if (!message || message.is_system) continue;
@@ -268,9 +270,10 @@
                     preview: content.length > 240 ? content.slice(0, 240) + '…' : content,
                     author: message.is_user ? '用户' : (message.name || entry.characterName || '角色'),
                     messageCount: Math.max(0, messages.length - 1),
+                    nativeMainChat,
                 };
             }
-            return { timestamp: 0, messageCount: Math.max(0, messages.length - 1) };
+            return { timestamp: 0, messageCount: Math.max(0, messages.length - 1), nativeMainChat };
         } catch (error) {
             console.warn('[平行叙事] 读取聊天最后消息失败：', entry.fileName, error);
             return { timestamp: 0 };
@@ -288,11 +291,46 @@
                 entry.latestMessagePreview = latest.preview || '';
                 entry.latestMessageAuthor = latest.author || '';
                 entry.messageCount = latest.messageCount ?? 0;
+                entry.nativeMainChat = latest.nativeMainChat || '';
             }
         };
         // Avoid flooding the Tavern API when a character has many chat files.
         const workerCount = Math.min(4, queue.length);
         await Promise.all(Array.from({ length: workerCount }, () => worker()));
+
+        // Rebuild missing extension indexes from the native chat header.
+        // Never rewrite chat files: only restore the manager's mapping metadata.
+        const store = getStore();
+        let restored = 0;
+        for (const entry of entries) {
+            if (!entry.fileName || !entry.nativeMainChat) continue;
+            const exists = store.branches.some((branch) =>
+                normalizeChatFile(branch.chatFile) === normalizeChatFile(entry.fileName)
+                && (branch.sourceCharacterAvatar
+                    ? branch.sourceCharacterAvatar === entry.characterAvatar
+                    : String(branch.sourceCharacterId ?? '') === String(entry.characterId))
+            );
+            if (exists) continue;
+            store.branches.push({
+                id: makeId(),
+                name: entry.fileName,
+                chatFile: entry.fileName,
+                parentId: null,
+                sourceCharacterId: entry.characterId,
+                sourceCharacterName: entry.characterName,
+                sourceCharacterAvatar: entry.characterAvatar,
+                sourceChatFile: normalizeChatFile(entry.nativeMainChat),
+                sourceChat: normalizeChatFile(entry.nativeMainChat),
+                sourceMessageId: null,
+                createdAt: 0,
+                recoveredFromNativeMetadata: true,
+            });
+            restored++;
+        }
+        if (restored) {
+            saveStore();
+            console.info('[平行叙事] 已从酒馆原生分支元数据恢复索引：', restored);
+        }
         return entries;
     }
 
