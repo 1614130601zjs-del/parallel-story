@@ -853,76 +853,35 @@
 }
 
 
-/* Give every ordinary chat a quiet, consistent frame around its full content. */
-.parallel-story-native-chat-item {
-    box-sizing: border-box !important;
-    margin: 0 0 10px !important;
-    padding: 0 !important;
-    border: 1px solid var(--SmartThemeBorderColor, rgba(128, 128, 128, .28)) !important;
-    border-radius: 9px !important;
-    overflow: hidden;
-    background: var(--SmartThemeBlurTintColor, rgba(128, 128, 128, .035));
-}
-.parallel-story-native-chat-item > .parallel-story-native-block {
+/* Visible card frame on each ordinary chat row. Use a fixed neutral border
+   rather than theme border variables that may resolve to transparent. */
+.parallel-story-native-chat-item.select_chat_block_wrapper {
+    display: block !important;
     box-sizing: border-box !important;
     width: 100% !important;
-    min-width: 0;
+    margin: 0 0 12px !important;
+    padding: 0 !important;
+    border: 1px solid rgba(105, 105, 105, .34) !important;
+    border-radius: 10px !important;
+    background: rgba(128, 128, 128, .045) !important;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12) !important;
+    overflow: hidden !important;
+}
+.parallel-story-native-chat-item.select_chat_block_wrapper > .parallel-story-native-block {
+    display: flex !important;
+    box-sizing: border-box !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    margin: 0 !important;
     padding: 10px 12px !important;
     border: 0 !important;
     border-radius: 0 !important;
     background: transparent !important;
-    gap: 5px !important;
 }
-.parallel-story-native-chat-item > .parallel-story-native-block.is-current {
-    background: var(--cobalt30a, rgba(120, 115, 220, .28)) !important;
+.parallel-story-native-chat-item.select_chat_block_wrapper > .parallel-story-native-block:hover {
+    background: rgba(128, 128, 128, .07) !important;
 }
-.parallel-story-native-chat-item .parallel-story-native-meta {
-    gap: 2px !important;
-    column-gap: 2px !important;
-}
-.parallel-story-native-chat-item .parallel-story-native-meta > .chat_messages_date {
-    margin-right: 1px !important;
-}
-.parallel-story-native-chat-item .parallel-story-native-meta > .chat_messages_num {
-    margin: 0 2px 0 0 !important;
-}
-.parallel-story-native-chat-item .parallel-story-native-meta > .parallel-story-svg-action {
-    margin: 0 !important;
-}
-.parallel-story-native-chat-item .select_chat_block_mes {
-    margin-top: 1px;
-}
-.parallel-story-native-chat-item:has(> .parallel-story-native-block.is-current) {
-    border-color: var(--SmartThemeQuoteColor, rgba(120, 115, 220, .55)) !important;
-}
-
-
-/* Ensure each ordinary chat has its own visible frame, including inactive rows. */
-.parallel-story-native-chat-item {
-    display: block !important;
-    width: 100%;
-    margin: 0 0 10px !important;
-    padding: 0 !important;
-    border: 0 !important;
-    background: transparent !important;
-    overflow: visible !important;
-}
-.parallel-story-native-chat-item > .parallel-story-native-block {
-    display: flex !important;
-    box-sizing: border-box !important;
-    width: 100% !important;
-    margin: 0 !important;
-    padding: 10px 12px !important;
-    border: 1px solid var(--SmartThemeBorderColor, rgba(128, 128, 128, .32)) !important;
-    border-radius: 9px !important;
-    background: var(--SmartThemeBlurTintColor, rgba(128, 128, 128, .045)) !important;
-}
-.parallel-story-native-chat-item > .parallel-story-native-block:hover {
-    border-color: var(--SmartThemeQuoteColor, rgba(128, 128, 128, .55)) !important;
-    background: var(--white30a, rgba(128, 128, 128, .08)) !important;
-}
-.parallel-story-native-chat-item > .parallel-story-native-block.is-current,
-.parallel-story-native-chat-item > .parallel-story-native-block.is-current:hover {
-    border-color: var(--SmartThemeQuoteColor, rgba(120, 115, 220, .6)) !important;
-    background: var(--cobalt30a, rgba(120, 115, 220, .28)) !important;
+.parallel-story-native-chat-item.select_chat_block_wrapper > .parallel-story-native-block.is-current,
+.parallel-story-native-chat-item.select_chat_block_wrapper > .parallel-story-native-block.is-current:hover {
+    background: rgba(125, 115, 225, .24) !important;
 }
