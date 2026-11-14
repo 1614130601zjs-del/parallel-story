@@ -835,3 +835,19 @@
     stroke-linejoin: round !important;
     overflow: visible;
 }
+
+
+/* Date and title share native text sizing; all three actions follow the date. */
+.parallel-story-native-chat-item .parallel-story-native-title > .select_chat_block_filename,
+.parallel-story-native-chat-item .parallel-story-native-meta > .chat_messages_date {
+    font-size: 1em !important;
+    font-weight: inherit;
+    line-height: 25px;
+}
+.parallel-story-native-chat-item .parallel-story-native-meta {
+    font-size: inherit !important;
+    gap: 5px !important;
+}
+.parallel-story-native-chat-item .parallel-story-native-meta > .chat_messages_num {
+    font-size: 1em !important;
+}
