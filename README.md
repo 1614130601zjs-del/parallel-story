@@ -1,6 +1,10 @@
-# 平行叙事（Parallel Story）
+# 档案（Archive）
 
-SillyTavern extension: a native chat-record manager with optional parallel-story branch creation.
+SillyTavern extension: a native chat-record manager with optional story-branch creation.
+
+## 1.6.36
+
+- Renames the user-facing extension name to **档案** across the extension menu, manager window, and notifications.
 
 ## 1.6.1
 
