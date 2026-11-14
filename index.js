@@ -48,16 +48,32 @@
     }
 
     function getCurrentChatFile(context) {
-        const details = context?.getCurrentChatDetails?.();
-        return details?.chatFileName
-            ?? details?.file_name
-            ?? context?.chatId
+        // SillyTavern context.chatId is the active character's current chat filename.
+        return context?.chatId
+            ?? context?.getCurrentChatId?.()
             ?? '';
+    }
+
+    function getCurrentScope(context = getContext()) {
+        const characterId = context?.characterId;
+        const characterName = context?.name2 || '未知角色';
+        const chatFile = getCurrentChatFile(context);
+        return {
+            characterId: characterId == null ? '' : String(characterId),
+            characterName: String(characterName),
+            chatFile: String(chatFile || ''),
+        };
     }
 
     function getCurrentBranchId() {
         const currentFile = getCurrentChatFile(getContext());
         return getStore().branches.find((item) => item.chatFile === currentFile)?.id ?? null;
+    }
+
+    function getBranchGroupKey(branch) {
+        const characterId = branch.sourceCharacterId ?? '';
+        const chatFile = branch.sourceChatFile ?? branch.sourceChat ?? '';
+        return JSON.stringify([String(characterId), String(chatFile)]);
     }
 
     function showNotice(message, type = 'info') {
@@ -76,26 +92,33 @@
         closeManager();
 
         const store = getStore();
-        const currentParentId = getCurrentBranchId();
+        const currentScope = getCurrentScope();
+        const currentKey = JSON.stringify([currentScope.characterId, currentScope.chatFile]);
         const branches = [...store.branches].sort((a, b) => b.createdAt - a.createdAt);
-        const root = document.createElement('div');
-        root.id = ROOT_ID;
-        root.className = 'parallel-story-backdrop';
-        root.innerHTML = `
-            <section class="parallel-story-panel" role="dialog" aria-modal="true" aria-label="平行叙事">
-                <header class="parallel-story-header">
-                    <div>
-                        <div class="parallel-story-title">平行叙事</div>
-                        <div class="parallel-story-subtitle">管理从当前角色聊天中创建的剧情分支</div>
-                    </div>
-                    <button class="parallel-story-icon-button" data-action="close" aria-label="关闭">×</button>
-                </header>
-                <div class="parallel-story-toolbar">
-                    <button class="parallel-story-primary" data-action="create">＋ 创建当前楼层分支</button>
-                    <span class="parallel-story-count">${branches.length} 条分支</span>
-                </div>
-                <div class="parallel-story-list">
-                    ${branches.length ? branches.map((branch) => {
+        const grouped = new Map();
+
+        for (const branch of branches) {
+            const key = getBranchGroupKey(branch);
+            if (!grouped.has(key)) grouped.set(key, []);
+            grouped.get(key).push(branch);
+        }
+
+        const groupMarkup = [...grouped.entries()].map(([key, items]) => {
+            const first = items[0];
+            const legacy = !first.sourceCharacterName && !first.sourceCharacterId;
+            const characterName = legacy ? '旧版分支（来源待识别）' : (first.sourceCharacterName || '未知角色');
+            const chatFile = first.sourceChatFile ?? first.sourceChat ?? '';
+            const isCurrent = key === currentKey;
+            return `
+                <section class="parallel-story-group${isCurrent ? ' is-current' : ''}">
+                    <header class="parallel-story-group-header">
+                        <div class="parallel-story-group-title">${escapeHtml(characterName)}</div>
+                        <div class="parallel-story-group-meta">
+                            ${escapeHtml(chatFile ? `聊天记录：${chatFile}` : '聊天记录：未记录')}
+                            ${isCurrent ? '<span class="parallel-story-current-tag">当前聊天</span>' : ''}
+                        </div>
+                    </header>
+                    ${items.map((branch) => {
                         const parent = branch.parentId
                             ? store.branches.find((item) => item.id === branch.parentId)
                             : null;
@@ -110,9 +133,30 @@
                                     <button data-action="remove" data-id="${escapeHtml(branch.id)}" title="从管理器移除">移除</button>
                                 </div>
                             </article>`;
-                    }).join('') : '<div class="parallel-story-empty">还没有平行剧情<br><span>从当前聊天创建第一条分支</span></div>'}
+                    }).join('')}
+                </section>`;
+        }).join('');
+
+        const root = document.createElement('div');
+        root.id = ROOT_ID;
+        root.className = 'parallel-story-backdrop';
+        root.innerHTML = `
+            <section class="parallel-story-panel" role="dialog" aria-modal="true" aria-label="平行叙事">
+                <header class="parallel-story-header">
+                    <div>
+                        <div class="parallel-story-title">平行叙事</div>
+                        <div class="parallel-story-subtitle">按角色和独立聊天记录整理剧情分支</div>
+                    </div>
+                    <button class="parallel-story-icon-button" data-action="close" aria-label="关闭">×</button>
+                </header>
+                <div class="parallel-story-toolbar">
+                    <button class="parallel-story-primary" data-action="create">＋ 创建当前楼层分支</button>
+                    <span class="parallel-story-count">${branches.length} 条分支</span>
                 </div>
-                <footer class="parallel-story-footer">聊天正文由酒馆原生分支功能保存；本管理器只记录名称和索引。</footer>
+                <div class="parallel-story-list">
+                    ${branches.length ? groupMarkup : '<div class="parallel-story-empty">还没有平行剧情<br><span>从当前聊天创建第一条分支</span></div>'}
+                </div>
+                <footer class="parallel-story-footer">每条分支会记录来源角色、聊天记录和楼层；聊天正文仍由酒馆原生功能保存。</footer>
             </section>`;
         root.addEventListener('click', handleManagerClick);
         root.addEventListener('click', (event) => {
@@ -141,12 +185,17 @@
             }
 
             const store = getStore();
+            const sourceScope = getCurrentScope(context);
             store.branches.push({
                 id: makeId(),
                 name,
                 chatFile,
                 parentId: getCurrentBranchId(),
-                sourceChat: getCurrentChatFile(context),
+                sourceCharacterId: sourceScope.characterId,
+                sourceCharacterName: sourceScope.characterName,
+                sourceChatFile: sourceScope.chatFile,
+                // Keep the old field for compatibility with existing local indexes.
+                sourceChat: sourceScope.chatFile,
                 sourceMessageId,
                 createdAt: Date.now(),
             });
