@@ -294,3 +294,15 @@
     color: var(--SmartThemeBodyColor, #30343a);
     background: var(--SmartThemeBlurTintColor, rgba(120, 125, 130, .12));
 }
+
+/* Per-message branch shortcut: inherit SillyTavern message-action sizing. */
+#chat .mes_buttons .parallel-story-floor-branch {
+    opacity: .72;
+    cursor: pointer;
+}
+
+#chat .mes_buttons .parallel-story-floor-branch:hover,
+#chat .mes_buttons .parallel-story-floor-branch:focus-visible {
+    opacity: 1;
+    color: var(--SmartThemeQuoteColor, var(--SmartThemeBodyColor));
+}
