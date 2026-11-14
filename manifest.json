@@ -1,9 +1,9 @@
 {
-  "display_name": "平行叙事",
+  "display_name": "档案",
   "loading_order": 9,
   "js": "index.js",
   "css": "style.css",
   "author": "1614130601zjs-del",
-  "version": "1.6.34",
+  "version": "1.6.35",
   "homePage": "https://github.com/1614130601zjs-del/parallel-story"
 }
