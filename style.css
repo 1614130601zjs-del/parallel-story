@@ -1133,3 +1133,25 @@
 .parallel-story-empty {
     color: #333333 !important;
 }
+
+
+/* Search all character cards, including those hidden with zero chats. */
+.parallel-story-character-search {
+    box-sizing: border-box;
+    display: block;
+    width: 100%;
+    margin: 2px 0 10px;
+    padding: 9px 11px;
+    border: 1px solid #dedede;
+    border-radius: 3px;
+    color: #171717;
+    background: #ffffff;
+    font-size: 12px;
+    outline: none;
+}
+.parallel-story-character-search:focus {
+    border-color: #888888;
+}
+.parallel-story-character-search::placeholder {
+    color: #888888;
+}
