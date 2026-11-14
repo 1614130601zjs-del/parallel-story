@@ -278,3 +278,19 @@
     color: var(--SmartThemeEmColor, #9a5d5d);
 }
 
+
+.parallel-story-import {
+    margin-left: 3px;
+    padding: 3px 7px;
+    border: 1px solid var(--SmartThemeBorderColor, rgba(90, 95, 100, .18));
+    border-radius: 6px;
+    color: var(--SmartThemeQuoteColor, #777d82);
+    background: transparent;
+    font-size: 10px;
+    cursor: pointer;
+}
+
+.parallel-story-import:hover {
+    color: var(--SmartThemeBodyColor, #30343a);
+    background: var(--SmartThemeBlurTintColor, rgba(120, 125, 130, .12));
+}
