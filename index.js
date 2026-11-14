@@ -4,6 +4,29 @@
     const EXTENSION_KEY = 'parallel_story';
     const MENU_ID = 'parallel-story-menu-entry';
     const ROOT_ID = 'parallel-story-root';
+    let chatEntriesCache = null;
+    let chatEntriesPromise = null;
+
+    function invalidateChatEntriesCache() {
+        chatEntriesCache = null;
+        chatEntriesPromise = null;
+    }
+
+    async function getCachedChatEntries() {
+        if (chatEntriesCache) return chatEntriesCache;
+        if (!chatEntriesPromise) {
+            chatEntriesPromise = collectChatEntries()
+                .then((entries) => {
+                    chatEntriesCache = entries;
+                    return entries;
+                })
+                .catch((error) => {
+                    chatEntriesPromise = null;
+                    throw error;
+                });
+        }
+        return chatEntriesPromise;
+    }
 
     const getContext = () => window.SillyTavern?.getContext?.() ?? null;
 
@@ -223,6 +246,7 @@
             if (normalizeChatFile(branch.sourceChat) === oldBase) branch.sourceChat = finalBase;
         }
         saveStore();
+        invalidateChatEntriesCache();
         return true;
     }
 
@@ -244,6 +268,7 @@
             formData.set('character_name', character.name || 'Character');
             const imported = await importCharacterChat(formData, { refresh: false });
             if (!Array.isArray(imported) || imported.length === 0) throw new Error('酒馆未能导入该文件，请确认文件格式正确');
+            invalidateChatEntriesCache();
             showNotice('已导入 ' + imported.length + ' 份原生聊天记录。', 'success');
             await renderManager();
         } catch (error) {
@@ -390,12 +415,12 @@
             throw new Error(`目标楼层不存在：当前聊天共 ${activeContext?.chat?.length ?? 0} 楼。`);
         }
 
-        const slashContext = await import('/scripts/st-context.js');
-        if (typeof slashContext.executeSlashCommandsWithOptions !== 'function') {
-            throw new Error('当前酒馆没有提供原生楼层跳转命令接口');
+        const slashCommands = await import('/scripts/slash-commands.js');
+        if (typeof slashCommands.executeSlashCommandsWithOptions !== 'function') {
+            throw new Error('当前酒馆没有提供原生楼层跳转命令接口（slash-commands.js）');
         }
 
-        await slashContext.executeSlashCommandsWithOptions(`/chat-jump ${targetIndex}`);
+        await slashCommands.executeSlashCommandsWithOptions(`/chat-jump ${targetIndex}`);
 
         // The native command can finish without throwing even when it cannot
         // find the message element. Verify the target is actually rendered.
@@ -549,7 +574,7 @@
         document.body.append(root);
 
         try {
-            root._entries = await collectChatEntries();
+            root._entries = await getCachedChatEntries();
             if (!root.isConnected) return;
             renderCharacterCards(root, root._entries);
         } catch (error) {
@@ -601,6 +626,7 @@
                 createdAt: Date.now(),
             });
             saveStore();
+            invalidateChatEntriesCache();
             await openCharacterChat(chatFile);
             renderManager();
             showNotice('平行剧情已创建。', 'success');
@@ -681,6 +707,7 @@
                     if (removedIds.includes(child.parentId)) child.parentId = null;
                 }
                 saveStore();
+                invalidateChatEntriesCache();
                 await renderManager();
                 showNotice('原生聊天记录已删除。', 'success');
             } catch (error) {
@@ -789,6 +816,7 @@
                     if (child.parentId === id) child.parentId = null;
                 }
                 saveStore();
+                invalidateChatEntriesCache();
                 await renderManager();
                 showNotice('分支及对应的原生聊天记录已删除。', 'success');
             } catch (error) {
@@ -841,6 +869,10 @@
     function init() {
         installMenuEntry();
         installMessageBranchButtons();
+        // Warm the native chat-list cache once when the extension starts.
+        getCachedChatEntries().catch((error) => {
+            console.warn('[平行叙事] 启动时预加载聊天记录失败，打开管理器时将重试：', error);
+        });
         const observer = new MutationObserver(() => {
             installMenuEntry();
             installMessageBranchButtons();
