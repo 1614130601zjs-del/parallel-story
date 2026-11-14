@@ -311,6 +311,40 @@
                     : String(branch.sourceCharacterId ?? '') === String(entry.characterId))
             );
             if (exists) continue;
+            const sourceChatFile = normalizeChatFile(entry.nativeMainChat);
+            let sourceMessageId = null;
+            // createBranch also appends the new branch filename to the source
+            // message's extra.branches array. Use that reverse link to recover
+            // the exact floor without modifying either native chat file.
+            try {
+                const parentResponse = await fetch('/api/chats/get', {
+                    method: 'POST',
+                    headers: getRequestHeaders(),
+                    body: JSON.stringify({
+                        ch_name: entry.characterName,
+                        file_name: sourceChatFile,
+                        avatar_url: entry.characterAvatar,
+                    }),
+                });
+                if (parentResponse.ok) {
+                    const parentMessages = await parentResponse.json();
+                    if (Array.isArray(parentMessages)) {
+                        for (let messageIndex = 1; messageIndex < parentMessages.length; messageIndex++) {
+                            const branchNames = parentMessages[messageIndex]?.extra?.branches;
+                            if (!Array.isArray(branchNames)) continue;
+                            const linked = branchNames.some((name) =>
+                                normalizeChatFile(name) === normalizeChatFile(entry.fileName)
+                            );
+                            if (linked) {
+                                sourceMessageId = messageIndex - 1;
+                                break;
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                console.warn('[平行叙事] 恢复分支来源楼层失败：', entry.fileName, error);
+            }
             store.branches.push({
                 id: makeId(),
                 name: entry.fileName,
@@ -319,9 +353,9 @@
                 sourceCharacterId: entry.characterId,
                 sourceCharacterName: entry.characterName,
                 sourceCharacterAvatar: entry.characterAvatar,
-                sourceChatFile: normalizeChatFile(entry.nativeMainChat),
-                sourceChat: normalizeChatFile(entry.nativeMainChat),
-                sourceMessageId: null,
+                sourceChatFile,
+                sourceChat: sourceChatFile,
+                sourceMessageId,
                 createdAt: 0,
                 recoveredFromNativeMetadata: true,
             });
