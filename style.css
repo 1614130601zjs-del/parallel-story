@@ -895,3 +895,34 @@
 .parallel-story-native-chat-item:has(> .parallel-story-native-block.is-current) {
     border-color: var(--SmartThemeQuoteColor, rgba(120, 115, 220, .55)) !important;
 }
+
+
+/* Ensure each ordinary chat has its own visible frame, including inactive rows. */
+.parallel-story-native-chat-item {
+    display: block !important;
+    width: 100%;
+    margin: 0 0 10px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    overflow: visible !important;
+}
+.parallel-story-native-chat-item > .parallel-story-native-block {
+    display: flex !important;
+    box-sizing: border-box !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 10px 12px !important;
+    border: 1px solid var(--SmartThemeBorderColor, rgba(128, 128, 128, .32)) !important;
+    border-radius: 9px !important;
+    background: var(--SmartThemeBlurTintColor, rgba(128, 128, 128, .045)) !important;
+}
+.parallel-story-native-chat-item > .parallel-story-native-block:hover {
+    border-color: var(--SmartThemeQuoteColor, rgba(128, 128, 128, .55)) !important;
+    background: var(--white30a, rgba(128, 128, 128, .08)) !important;
+}
+.parallel-story-native-chat-item > .parallel-story-native-block.is-current,
+.parallel-story-native-chat-item > .parallel-story-native-block.is-current:hover {
+    border-color: var(--SmartThemeQuoteColor, rgba(120, 115, 220, .6)) !important;
+    background: var(--cobalt30a, rgba(120, 115, 220, .28)) !important;
+}
