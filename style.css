@@ -993,3 +993,26 @@
     color: var(--SmartThemeBodyColor) !important;
     opacity: .72;
 }
+
+.parallel-story-branch-source {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+}
+.parallel-story-source-jump {
+    flex: 0 0 auto;
+    padding: 2px 7px;
+    border: 1px solid currentColor;
+    border-radius: 2px;
+    color: var(--SmartThemeBodyColor);
+    background: transparent;
+    font-size: .86em;
+    line-height: 1.5;
+    opacity: .82;
+    cursor: pointer;
+}
+.parallel-story-source-jump:active {
+    background: rgba(128, 128, 128, .14);
+}
