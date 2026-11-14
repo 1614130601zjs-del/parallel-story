@@ -773,22 +773,47 @@
 
         const list = root.querySelector('.parallel-story-list');
         const count = root.querySelector('.parallel-story-count');
-        if (count) count.textContent = `${characters.length} 位角色`;
         if (!list) return;
 
-        list.innerHTML = characters.length ? `
-            <div class="parallel-story-character-grid">
-                ${characters.map(({ character, id, chats }) => `
-                    <button class="parallel-story-character-card" data-action="select-character" data-character-id="${escapeHtml(id)}">
-                        <img class="parallel-story-character-avatar" src="/characters/${encodeURIComponent(character.avatar)}" alt="" loading="lazy">
-                        <span class="parallel-story-character-info">
-                            <span class="parallel-story-character-name">${escapeHtml(character.name || '未命名角色')}</span>
-                            <span class="parallel-story-character-count">${chats.length} 份聊天记录</span>
-                        </span>
-                        <span class="parallel-story-character-arrow">›</span>
-                    </button>
-                `).join('')}
-            </div>` : '<div class="parallel-story-empty">酒馆中还没有可管理的角色卡</div>';
+        const query = String(root._characterQuery || '').trim().toLocaleLowerCase();
+        const totalCount = characters.length;
+        // Zero-chat characters stay out of the default home page. Searching
+        // explicitly includes them, so they can still be found and opened.
+        const visibleCharacters = characters.filter((item) => {
+            if (query) return String(item.character.name || '').toLocaleLowerCase().includes(query);
+            return item.chats.length > 0;
+        });
+        if (count) count.textContent = query
+            ? `${visibleCharacters.length} / ${totalCount} 位角色`
+            : `${visibleCharacters.length} 位角色`;
+
+        list.innerHTML = `
+            <input class="parallel-story-character-search" type="search"
+                placeholder="搜索角色名称，查找隐藏角色…"
+                aria-label="搜索角色名称" value="${escapeHtml(root._characterQuery || '')}">
+            ${visibleCharacters.length ? `
+                <div class="parallel-story-character-grid">
+                    ${visibleCharacters.map(({ character, id, chats }) => `
+                        <button class="parallel-story-character-card" data-action="select-character" data-character-id="${escapeHtml(id)}">
+                            <img class="parallel-story-character-avatar" src="/characters/${encodeURIComponent(character.avatar)}" alt="" loading="lazy">
+                            <span class="parallel-story-character-info">
+                                <span class="parallel-story-character-name">${escapeHtml(character.name || '未命名角色')}</span>
+                                <span class="parallel-story-character-count">${chats.length} 份聊天记录</span>
+                            </span>
+                            <span class="parallel-story-character-arrow">›</span>
+                        </button>
+                    `).join('')}
+                </div>` : `<div class="parallel-story-empty">${query ? '没有找到匹配的角色' : '还没有聊天记录。可搜索角色名称，找回隐藏的角色。'}</div>`}`;
+
+        const search = list.querySelector('.parallel-story-character-search');
+        search?.addEventListener('input', () => {
+            root._characterQuery = search.value;
+            const position = search.selectionStart;
+            renderCharacterCards(root, entries);
+            const next = list.querySelector('.parallel-story-character-search');
+            next?.focus();
+            try { next?.setSelectionRange(position, position); } catch (_) {}
+        });
     }
 
     function renderCharacterChats(root, entries, characterId) {
