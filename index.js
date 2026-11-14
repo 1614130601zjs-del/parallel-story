@@ -690,7 +690,7 @@
             return `
                 <article class="parallel-story-item parallel-story-native-item${active ? ' is-active' : ''}">
                     <div class="select_chat_block_wrapper flex-container parallel-story-native-wrapper">
-                        <div class="select_chat_block wide100p flex-container parallel-story-native-block" data-action="open-chat" data-character-id="${escapeHtml(entry.characterId)}" data-file="${escapeHtml(entry.fileName)}" role="button" tabindex="0">
+                        <button class="select_chat_block wide100p flex-container parallel-story-native-block" data-action="open-chat" data-character-id="${escapeHtml(entry.characterId)}" data-file="${escapeHtml(entry.fileName)}" type="button">
                             <div id="select_chat_name_wrapper" class="flex-container alignitemscenter justifySpaceBetween wide100p">
                                 <div class="flex-container alignItemsCenter parallel-story-native-title">
                                     <small class="select_chat_block_filename select_chat_block_filename_item">${escapeHtml(title)}</small>
@@ -705,7 +705,7 @@
                                 </div>
                             </div>
                             <div class="select_chat_block_mes">${escapeHtml(preview)}</div>
-                        </div>
+                        </button>
                     </div>
                     <div class="parallel-story-actions">
                         <button data-action="rename-chat" data-character-id="${escapeHtml(entry.characterId)}" data-avatar="${escapeHtml(entry.characterAvatar)}" data-file="${escapeHtml(entry.fileName)}" title="重命名原生聊天记录">改名</button>
