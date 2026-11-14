@@ -360,15 +360,64 @@
     }
 
     async function jumpToNativeFloor(entry, messageIndex) {
-        const context = getContext();
+        const targetIndex = Number(messageIndex);
+        if (!Number.isInteger(targetIndex) || targetIndex < 0) {
+            throw new Error('目标楼层编号无效。');
+        }
+
+        const targetChatFile = normalizeChatFile(entry.fileName);
         const { selectCharacterById, openCharacterChat } = await loadNativeApis();
+
         await selectCharacterById(Number(entry.characterId), { switchMenu: false });
-        await openCharacterChat(normalizeChatFile(entry.fileName));
+        await openCharacterChat(targetChatFile);
+
+        // openCharacterChat resolves after loading the chat data, but wait for
+        // the active context to reflect the requested file before running chat-jump.
+        const waitUntil = Date.now() + 10000;
+        let activeContext = getContext();
+        while (Date.now() < waitUntil) {
+            activeContext = getContext();
+            const activeFile = normalizeChatFile(getCurrentChatFile(activeContext));
+            if (activeFile === targetChatFile && Array.isArray(activeContext?.chat)) break;
+            await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+
+        activeContext = getContext();
+        if (normalizeChatFile(getCurrentChatFile(activeContext)) !== targetChatFile) {
+            throw new Error('目标聊天没有成功打开，请重试。');
+        }
+        if (!Array.isArray(activeContext?.chat) || targetIndex >= activeContext.chat.length) {
+            throw new Error(`目标楼层不存在：当前聊天共 ${activeContext?.chat?.length ?? 0} 楼。`);
+        }
+
         const slashContext = await import('/scripts/st-context.js');
         if (typeof slashContext.executeSlashCommandsWithOptions !== 'function') {
             throw new Error('当前酒馆没有提供原生楼层跳转命令接口');
         }
-        await slashContext.executeSlashCommandsWithOptions(`/chat-jump ${Number(messageIndex)}`);
+
+        await slashContext.executeSlashCommandsWithOptions(`/chat-jump ${targetIndex}`);
+
+        // The native command can finish without throwing even when it cannot
+        // find the message element. Verify the target is actually rendered.
+        const renderDeadline = Date.now() + 5000;
+        let targetElement = null;
+        while (Date.now() < renderDeadline) {
+            targetElement = document.querySelector(`#chat .mes[mesid="${targetIndex}"]`);
+            if (targetElement) break;
+            await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+
+        const chatContainer = document.getElementById('chat');
+        if (!targetElement || !chatContainer) {
+            throw new Error('聊天已打开，但酒馆没有渲染目标楼层。请稍后重试。');
+        }
+
+        const elementRect = targetElement.getBoundingClientRect();
+        const containerRect = chatContainer.getBoundingClientRect();
+        chatContainer.scrollTo({
+            top: elementRect.top - containerRect.top + chatContainer.scrollTop,
+            behavior: 'smooth',
+        });
     }
 
     function renderCharacterCards(root, entries) {
