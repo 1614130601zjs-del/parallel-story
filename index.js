@@ -882,9 +882,51 @@
         return true;
     }
 
+    async function installNativeChatSync() {
+        const { eventSource, event_types } = await import('/scripts/events.js');
+        const chatListEvents = [
+            event_types.CHAT_CREATED,
+            event_types.CHAT_DELETED,
+            event_types.CHAT_RENAMED,
+        ].filter(Boolean);
+
+        const syncChatEntries = async () => {
+            // Native chat management can change files outside this extension.
+            // Invalidate only when SillyTavern announces a real list mutation.
+            invalidateChatEntriesCache();
+            try {
+                const entries = await getCachedChatEntries();
+                const root = document.getElementById(ROOT_ID);
+                if (!root || root._floorEntry) return;
+                root._entries = entries;
+                const selectedCharacterId = root.dataset.selectedCharacterId;
+                if (selectedCharacterId !== undefined) {
+                    renderCharacterChats(root, entries, selectedCharacterId);
+                } else {
+                    renderCharacterCards(root, entries);
+                }
+            } catch (error) {
+                console.warn('[平行叙事] 同步原生聊天记录失败：', error);
+            }
+        };
+
+        for (const eventName of chatListEvents) {
+            eventSource.on(eventName, syncChatEntries);
+        }
+
+        window.addEventListener('pagehide', () => {
+            for (const eventName of chatListEvents) {
+                eventSource.removeListener?.(eventName, syncChatEntries);
+            }
+        }, { once: true });
+    }
+
     function init() {
         installMenuEntry();
         installMessageBranchButtons();
+        installNativeChatSync().catch((error) => {
+            console.warn('[平行叙事] 无法监听酒馆原生聊天记录变化：', error);
+        });
         // Wait for SillyTavern to finish loading character cards before caching chats.
         // An early empty character list must never become a permanent empty cache.
         const preloadChatsWhenReady = async () => {
