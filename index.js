@@ -226,7 +226,7 @@
         return Number.isFinite(parsed) ? parsed : 0;
     }
 
-    async function fetchChatLastMessageTimestamp(entry, getRequestHeaders) {
+    async function fetchChatLastMessageInfo(entry, getRequestHeaders) {
         try {
             const response = await fetch('/api/chats/get', {
                 method: 'POST',
@@ -237,19 +237,29 @@
                     avatar_url: entry.characterAvatar,
                 }),
             });
-            if (!response.ok) return 0;
+            if (!response.ok) return { timestamp: 0 };
             const messages = await response.json();
-            if (!Array.isArray(messages)) return 0;
+            if (!Array.isArray(messages)) return { timestamp: 0 };
 
-            // The first JSONL row is chat metadata; message rows carry send_date.
+            // The first JSONL row is chat metadata. Reuse the same read to
+            // collect the last visible message for the character's chat list.
             for (let index = messages.length - 1; index >= 1; index--) {
-                const timestamp = parseMessageTimestamp(messages[index]?.send_date);
-                if (timestamp > 0) return timestamp;
+                const message = messages[index];
+                if (!message || message.is_system) continue;
+                const content = extractFloorContent(message.mes).replace(/\s+/g, ' ').trim();
+                const timestamp = parseMessageTimestamp(message.send_date);
+                if (!content && !timestamp) continue;
+                return {
+                    timestamp,
+                    preview: content.length > 240 ? content.slice(0, 240) + '…' : content,
+                    author: message.is_user ? '用户' : (message.name || entry.characterName || '角色'),
+                    messageCount: Math.max(0, messages.length - 1),
+                };
             }
-            return 0;
+            return { timestamp: 0, messageCount: Math.max(0, messages.length - 1) };
         } catch (error) {
-            console.warn('[平行叙事] 读取聊天最后消息时间失败：', entry.fileName, error);
-            return 0;
+            console.warn('[平行叙事] 读取聊天最后消息失败：', entry.fileName, error);
+            return { timestamp: 0 };
         }
     }
 
@@ -259,7 +269,11 @@
         const worker = async () => {
             while (cursor < queue.length) {
                 const entry = queue[cursor++];
-                entry.latestMessageAt = await fetchChatLastMessageTimestamp(entry, getRequestHeaders);
+                const latest = await fetchChatLastMessageInfo(entry, getRequestHeaders);
+                entry.latestMessageAt = latest.timestamp;
+                entry.latestMessagePreview = latest.preview || '';
+                entry.latestMessageAuthor = latest.author || '';
+                entry.messageCount = latest.messageCount ?? 0;
             }
         };
         // Avoid flooding the Tavern API when a character has many chat files.
@@ -651,7 +665,11 @@
                 <article class="parallel-story-item${active ? ' is-active' : ''}">
                     <button class="parallel-story-open" data-action="open-chat" data-character-id="${escapeHtml(entry.characterId)}" data-file="${escapeHtml(entry.fileName)}">
                         <span class="parallel-story-item-name">${escapeHtml(title)}</span>
-                        <span class="parallel-story-item-meta">${escapeHtml(detail)}${active ? ' · 当前聊天' : ''}</span>
+                        <span class="parallel-story-item-meta">${escapeHtml(detail)} · ${Number(entry.messageCount || 0)} 条消息${active ? ' · 当前聊天' : ''}</span>
+                        <span class="parallel-story-last-message">
+                            ${entry.latestMessageAuthor ? `<span class="parallel-story-last-author">${escapeHtml(entry.latestMessageAuthor)}：</span>` : ''}
+                            ${escapeHtml(entry.latestMessagePreview || '（暂无可预览的消息）')}
+                        </span>
                     </button>
                     <div class="parallel-story-actions">
                         <button data-action="rename-chat" data-character-id="${escapeHtml(entry.characterId)}" data-avatar="${escapeHtml(entry.characterAvatar)}" data-file="${escapeHtml(entry.fileName)}" title="重命名原生聊天记录">改名</button>
