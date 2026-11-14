@@ -43,6 +43,7 @@
             openCharacterChat: script.openCharacterChat,
             selectCharacterById: script.selectCharacterById,
             deleteCharacterChatByName: script.deleteCharacterChatByName,
+            getRequestHeaders: script.getRequestHeaders,
         };
     }
 
@@ -99,11 +100,11 @@
         ) ?? null;
     }
 
-    async function fetchCharacterChats(context, character, characterId) {
+    async function fetchCharacterChats(context, character, characterId, getRequestHeaders) {
         if (!character?.avatar) return [];
         const response = await fetch('/api/characters/chats', {
             method: 'POST',
-            headers: context.getRequestHeaders?.() ?? { 'Content-Type': 'application/json' },
+            headers: getRequestHeaders(),
             body: JSON.stringify({ avatar_url: character.avatar }),
         });
         if (!response.ok) throw new Error(`读取「${character.name}」聊天记录失败（${response.status}）`);
@@ -120,14 +121,18 @@
 
     async function collectChatEntries() {
         const context = getContext();
-        if (!context?.characters || typeof context.getRequestHeaders !== 'function') {
-            throw new Error('当前酒馆没有提供读取角色聊天记录所需的接口');
+        if (!context?.characters) {
+            throw new Error('当前酒馆没有提供角色列表，无法读取聊天记录');
+        }
+        const { getRequestHeaders } = await loadNativeApis();
+        if (typeof getRequestHeaders !== 'function') {
+            throw new Error('当前酒馆没有提供请求验证接口，无法安全读取聊天记录');
         }
 
         const all = await Promise.all(context.characters.map(async (character, index) => {
             if (!character?.avatar) return [];
             try {
-                return await fetchCharacterChats(context, character, index);
+                return await fetchCharacterChats(context, character, index, getRequestHeaders);
             } catch (error) {
                 console.warn('[平行叙事] 读取角色聊天记录失败：', character?.name, error);
                 return [{ error: error.message, characterId: String(index), characterName: character?.name ?? '未知角色' }];
@@ -190,7 +195,7 @@
                     <button class="parallel-story-icon-button" data-action="close" aria-label="关闭">×</button>
                 </header>
                 <div class="parallel-story-toolbar">
-                    <button class="parallel-story-primary" data-action="create">＋ 从当前聊天创建分支</button>
+                    <button class="parallel-story-primary" data-action="create">＋ 从当前聊天创建剧情分支</button>
                     <span class="parallel-story-count">正在读取聊天记录…</span>
                 </div>
                 <div class="parallel-story-list"><div class="parallel-story-empty">正在整理角色聊天记录</div></div>
@@ -236,8 +241,8 @@
                         const title = branch?.name ?? legacyBranch?.name ?? entry.fileName;
                         const branchMeta = branch || legacyBranch;
                         const detail = isBranch
-                            ? `分支 · 来源第 ${Number(branchMeta.sourceMessageId) + 1} 楼`
-                            : '原生聊天记录';
+                            ? `剧情分支 · 来源第 ${Number(branchMeta.sourceMessageId) + 1} 楼`
+                            : '普通聊天';
                         const branchId = branchMeta?.id ?? '';
                         return `
                             <article class="parallel-story-item${active ? ' is-active' : ''}">
@@ -422,7 +427,7 @@
         const entry = document.createElement('div');
         entry.id = MENU_ID;
         entry.className = 'list-group-item flex-container flexGap5';
-        entry.innerHTML = '<i class="fa-solid fa-code-branch"></i><span>平行叙事</span>';
+        entry.innerHTML = '<i class="fa-solid fa-code-branch"></i><span>聊天记录管理器</span>';
         entry.addEventListener('click', renderManager);
         menu.append(entry);
         return true;
