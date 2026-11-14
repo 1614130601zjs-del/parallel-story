@@ -66,8 +66,11 @@
     }
 
     function getCurrentBranchId() {
-        const currentFile = getCurrentChatFile(getContext());
-        return getStore().branches.find((item) => item.chatFile === currentFile)?.id ?? null;
+        const scope = getCurrentScope();
+        return getStore().branches.find((item) =>
+            item.chatFile === scope.chatFile
+            && String(item.sourceCharacterId ?? '') === scope.characterId
+        )?.id ?? null;
     }
 
     function getBranchGroupKey(branch) {
