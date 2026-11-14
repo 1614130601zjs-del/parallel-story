@@ -304,13 +304,16 @@
         let restored = 0;
         for (const entry of entries) {
             if (!entry.fileName || !entry.nativeMainChat) continue;
-            const exists = store.branches.some((branch) =>
+            const existingBranch = store.branches.find((branch) =>
                 normalizeChatFile(branch.chatFile) === normalizeChatFile(entry.fileName)
                 && (branch.sourceCharacterAvatar
                     ? branch.sourceCharacterAvatar === entry.characterAvatar
                     : String(branch.sourceCharacterId ?? '') === String(entry.characterId))
             );
-            if (exists) continue;
+            // Older recovery builds may already have saved the branch index with
+            // sourceMessageId=null. Retry those records instead of treating the
+            // incomplete index as fully recovered.
+            if (existingBranch && existingBranch.sourceMessageId != null) continue;
             const sourceChatFile = normalizeChatFile(entry.nativeMainChat);
             let sourceMessageId = null;
             // createBranch also appends the new branch filename to the source
@@ -345,20 +348,27 @@
             } catch (error) {
                 console.warn('[平行叙事] 恢复分支来源楼层失败：', entry.fileName, error);
             }
-            store.branches.push({
-                id: makeId(),
-                name: entry.fileName,
-                chatFile: entry.fileName,
-                parentId: null,
-                sourceCharacterId: entry.characterId,
-                sourceCharacterName: entry.characterName,
-                sourceCharacterAvatar: entry.characterAvatar,
-                sourceChatFile,
-                sourceChat: sourceChatFile,
-                sourceMessageId,
-                createdAt: 0,
-                recoveredFromNativeMetadata: true,
-            });
+            if (existingBranch) {
+                existingBranch.sourceChatFile = sourceChatFile;
+                existingBranch.sourceChat = sourceChatFile;
+                existingBranch.sourceMessageId = sourceMessageId;
+                existingBranch.recoveredFromNativeMetadata = true;
+            } else {
+                store.branches.push({
+                    id: makeId(),
+                    name: entry.fileName,
+                    chatFile: entry.fileName,
+                    parentId: null,
+                    sourceCharacterId: entry.characterId,
+                    sourceCharacterName: entry.characterName,
+                    sourceCharacterAvatar: entry.characterAvatar,
+                    sourceChatFile,
+                    sourceChat: sourceChatFile,
+                    sourceMessageId,
+                    createdAt: 0,
+                    recoveredFromNativeMetadata: true,
+                });
+            }
             restored++;
         }
         if (restored) {
