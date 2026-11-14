@@ -162,8 +162,61 @@
             characterName: String(character.name ?? '未命名角色'),
             characterAvatar: String(character.avatar),
             fileName: normalizeChatFile(item.file_name),
-            lastActivityAt: item.last_mes ?? 0,
         }));
+    }
+
+    function parseMessageTimestamp(value) {
+        if (typeof value === 'number' && Number.isFinite(value)) return value;
+        if (typeof value !== 'string' || !value.trim()) return 0;
+        const trimmed = value.trim();
+        if (/^\\d+(?:\\.\\d+)?$/.test(trimmed)) {
+            const numeric = Number(trimmed);
+            return Number.isFinite(numeric) ? numeric : 0;
+        }
+        const parsed = Date.parse(trimmed);
+        return Number.isFinite(parsed) ? parsed : 0;
+    }
+
+    async function fetchChatLastMessageTimestamp(entry, getRequestHeaders) {
+        try {
+            const response = await fetch('/api/chats/get', {
+                method: 'POST',
+                headers: getRequestHeaders(),
+                body: JSON.stringify({
+                    ch_name: entry.characterName,
+                    file_name: normalizeChatFile(entry.fileName),
+                    avatar_url: entry.characterAvatar,
+                }),
+            });
+            if (!response.ok) return 0;
+            const messages = await response.json();
+            if (!Array.isArray(messages)) return 0;
+
+            // The first JSONL row is chat metadata; message rows carry send_date.
+            for (let index = messages.length - 1; index >= 1; index--) {
+                const timestamp = parseMessageTimestamp(messages[index]?.send_date);
+                if (timestamp > 0) return timestamp;
+            }
+            return 0;
+        } catch (error) {
+            console.warn('[平行叙事] 读取聊天最后消息时间失败：', entry.fileName, error);
+            return 0;
+        }
+    }
+
+    async function attachLatestMessageTimes(entries, getRequestHeaders) {
+        const queue = entries.filter((entry) => entry.fileName);
+        let cursor = 0;
+        const worker = async () => {
+            while (cursor < queue.length) {
+                const entry = queue[cursor++];
+                entry.latestMessageAt = await fetchChatLastMessageTimestamp(entry, getRequestHeaders);
+            }
+        };
+        // Avoid flooding the Tavern API when a character has many chat files.
+        const workerCount = Math.min(4, queue.length);
+        await Promise.all(Array.from({ length: workerCount }, () => worker()));
+        return entries;
     }
 
     async function collectChatEntries() {
@@ -207,6 +260,7 @@
             });
             seen.add(key);
         }
+        await attachLatestMessageTimes(entries, getRequestHeaders);
         return entries;
     }
 
@@ -470,19 +524,13 @@
             error: entries.find((entry) => entry.characterId === String(index) && entry.error)?.error,
         })).filter((item) => item.character?.avatar);
 
-        // Keep the active character pinned, then sort other characters by
-        // the modification time of their newest native chat file.
+        // Keep the active character pinned, then sort by the newest message's
+        // own send_date. Chat-file mtime is intentionally never used here.
         const currentScope = getCurrentScope(context);
-        const getActivityTime = (entry) => {
-            const value = entry?.lastActivityAt;
-            if (typeof value === 'number' && Number.isFinite(value)) return value;
-            const parsed = Date.parse(value);
-            return Number.isFinite(parsed) ? parsed : 0;
-        };
         characters.forEach((item, index) => {
             item.originalOrder = index;
             item.latestChatAt = item.chats.reduce(
-                (latest, entry) => Math.max(latest, getActivityTime(entry)),
+                (latest, entry) => Math.max(latest, Number(entry.latestMessageAt) || 0),
                 0,
             );
         });
