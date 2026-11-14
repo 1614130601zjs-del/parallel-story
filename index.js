@@ -734,6 +734,7 @@
                         </div>
                         <div class="parallel-story-native-meta">
                             <small class="chat_messages_date select_chat_block_filename_item">${escapeHtml(nativeDate)}</small>
+                            <small class="chat_messages_num select_chat_block_filename_item">(${Number(entry.messageCount || 0)})</small>
                             <button class="parallel-story-svg-action" data-action="rename-chat"
                                 data-character-id="${escapeHtml(entry.characterId)}" data-avatar="${escapeHtml(entry.characterAvatar)}"
                                 data-file="${escapeHtml(entry.fileName)}" title="重命名聊天记录" aria-label="重命名">
@@ -749,7 +750,6 @@
                                 data-file="${escapeHtml(entry.fileName)}" title="删除原生聊天记录" aria-label="删除">
                                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14"/><path d="M9 7V5h6v2"/><path d="m18 7-1 12H7L6 7"/><path d="M10 10.5v5M14 10.5v5"/></svg>
                             </button>` : ''}
-                            <small class="chat_messages_num select_chat_block_filename_item">(${Number(entry.messageCount || 0)})</small>
                         </div>
                         <div class="select_chat_block_mes">${escapeHtml(preview)}</div>
                     </div>
