@@ -626,13 +626,13 @@
 
 
 /* Ordinary chat rows: match the native record layout, with actions embedded in its rows. */
-.parallel-story-native-item {
+.parallel-story-native-chat-item {
     display: block;
     margin: 0 0 9px;
     padding: 0;
     border: 0;
 }
-.parallel-story-native-item .parallel-story-native-block {
+.parallel-story-native-chat-item .parallel-story-native-block {
     display: flex;
     width: 100%;
     min-width: 0;
@@ -647,10 +647,10 @@
     text-align: left;
     cursor: pointer;
 }
-.parallel-story-native-item .parallel-story-native-block:hover {
+.parallel-story-native-chat-item .parallel-story-native-block:hover {
     background-color: var(--white30a, rgba(128, 128, 128, .08));
 }
-.parallel-story-native-item .parallel-story-native-block[aria-current="true"] {
+.parallel-story-native-chat-item .parallel-story-native-block[aria-current="true"] {
     background-color: var(--cobalt30a, rgba(120, 115, 220, .28));
     border-color: transparent;
 }
@@ -680,7 +680,7 @@
 .parallel-story-native-meta .parallel-story-svg-action {
     margin-left: 1px;
 }
-.parallel-story-native-item .parallel-story-svg-action {
+.parallel-story-native-chat-item .parallel-story-svg-action {
     display: inline-flex;
     flex: 0 0 auto;
     width: 25px;
@@ -695,7 +695,7 @@
     opacity: .68;
     cursor: pointer;
 }
-.parallel-story-native-item .parallel-story-svg-action svg {
+.parallel-story-native-chat-item .parallel-story-svg-action svg {
     display: block;
     width: 17px;
     height: 17px;
@@ -705,15 +705,15 @@
     stroke-linecap: round;
     stroke-linejoin: round;
 }
-.parallel-story-native-item .parallel-story-svg-action:hover {
+.parallel-story-native-chat-item .parallel-story-svg-action:hover {
     color: var(--SmartThemeBodyColor, currentColor);
     background: var(--white30a, rgba(128, 128, 128, .12));
     opacity: 1;
 }
-.parallel-story-native-item .parallel-story-svg-action[data-action="delete-chat"]:hover {
+.parallel-story-native-chat-item .parallel-story-svg-action[data-action="delete-chat"]:hover {
     color: var(--SmartThemeEmColor, #a66);
 }
-.parallel-story-native-item .select_chat_block_mes {
+.parallel-story-native-chat-item .select_chat_block_mes {
     display: -webkit-box;
     overflow: hidden;
     width: 100%;
