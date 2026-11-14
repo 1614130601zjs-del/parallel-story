@@ -1302,7 +1302,7 @@
         const entry = document.createElement('div');
         entry.id = MENU_ID;
         entry.className = 'list-group-item flex-container flexGap5';
-        entry.innerHTML = '<i class="fa-solid fa-code-branch"></i><span>聊天记录管理器</span>';
+        entry.innerHTML = '<i class="fa-solid fa-code-branch"></i><span>档案</span>';
         entry.addEventListener('click', renderManager);
         menu.append(entry);
         return true;
