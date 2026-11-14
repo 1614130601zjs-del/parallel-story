@@ -925,3 +925,23 @@
     font-size: .9em;
     opacity: .72;
 }
+
+
+/* Branch cards share the exact visual rhythm of mainline cards. */
+.parallel-story-branch-chat-item > .parallel-story-native-block {
+    gap: 5px !important;
+}
+.parallel-story-branch-chat-item .parallel-story-branch-source {
+    margin: 0 0 1px !important;
+    color: var(--SmartThemeEmColor, var(--SmartThemeBodyColor)) !important;
+    font-size: .92em !important;
+    line-height: 1.45;
+    opacity: .78;
+}
+.parallel-story-branch-chat-item .parallel-story-native-meta {
+    gap: 2px !important;
+    column-gap: 2px !important;
+}
+.parallel-story-branch-chat-item .parallel-story-native-meta > .parallel-story-svg-action {
+    margin: 0 !important;
+}
