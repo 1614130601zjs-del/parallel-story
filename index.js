@@ -6,6 +6,30 @@
     const ROOT_ID = 'parallel-story-root';
     let chatEntriesCache = null;
     let chatEntriesPromise = null;
+    const pendingLocalDeleteKeys = new Set();
+
+    function getChatEntryKey(avatar, fileName) {
+        return JSON.stringify([String(avatar ?? ''), normalizeChatFile(fileName)]);
+    }
+
+    function applyDeletedChatToView(avatar, fileName) {
+        const targetKey = getChatEntryKey(avatar, fileName);
+        const matches = (entry) => getChatEntryKey(entry.characterAvatar, entry.fileName) === targetKey;
+
+        if (Array.isArray(chatEntriesCache)) {
+            chatEntriesCache = chatEntriesCache.filter((entry) => !matches(entry));
+        }
+
+        const root = document.getElementById(ROOT_ID);
+        if (!root || !Array.isArray(root._entries)) return;
+        root._entries = root._entries.filter((entry) => !matches(entry));
+        const selectedCharacterId = root.dataset.selectedCharacterId;
+        if (selectedCharacterId !== undefined) {
+            renderCharacterChats(root, root._entries, selectedCharacterId);
+        } else {
+            renderCharacterCards(root, root._entries);
+        }
+    }
 
     function invalidateChatEntriesCache() {
         chatEntriesCache = null;
@@ -807,11 +831,14 @@
             if (!confirmed) return;
             try {
                 const { getRequestHeaders } = await loadNativeApis();
+                const deleteKey = getChatEntryKey(avatar, fileName);
+                pendingLocalDeleteKeys.add(deleteKey);
                 const response = await fetch('/api/chats/delete', {
                     method: 'POST',
                     headers: getRequestHeaders(),
                     body: JSON.stringify({ chatfile: `${fileName}.jsonl`, avatar_url: avatar }),
                 });
+                pendingLocalDeleteKeys.delete(deleteKey);
                 if (!response.ok) throw new Error(`酒馆删除聊天文件失败（${response.status}）`);
                 const removedIds = store.branches.filter((item) =>
                     normalizeChatFile(item.chatFile) === fileName
@@ -822,8 +849,7 @@
                     if (removedIds.includes(child.parentId)) child.parentId = null;
                 }
                 saveStore();
-                invalidateChatEntriesCache();
-                await renderManager();
+                applyDeletedChatToView(avatar, fileName);
                 showNotice('原生聊天记录已删除。', 'success');
             } catch (error) {
                 console.error('[平行叙事] 删除原生聊天失败：', error);
@@ -910,6 +936,8 @@
 
             try {
                 const { getRequestHeaders } = await loadNativeApis();
+                const deleteKey = getChatEntryKey(owner.character.avatar, branchFile);
+                pendingLocalDeleteKeys.add(deleteKey);
                 const response = await fetch('/api/chats/delete', {
                     method: 'POST',
                     headers: getRequestHeaders(),
@@ -918,6 +946,7 @@
                         avatar_url: owner.character.avatar,
                     }),
                 });
+                pendingLocalDeleteKeys.delete(deleteKey);
                 if (!response.ok) {
                     throw new Error(`酒馆删除聊天文件失败（${response.status}）`);
                 }
@@ -928,8 +957,7 @@
                     if (child.parentId === id) child.parentId = null;
                 }
                 saveStore();
-                invalidateChatEntriesCache();
-                await renderManager();
+                applyDeletedChatToView(owner.character.avatar, branchFile);
                 showNotice('分支及对应的原生聊天记录已删除。', 'success');
             } catch (error) {
                 console.error('[平行叙事] 删除分支失败：', error);
@@ -1021,8 +1049,22 @@
                 );
                 const response = await originalFetch.apply(this, args);
                 if (response.ok && requestUrl.includes('/api/chats/delete')) {
-                    Promise.resolve(eventSource.emit(event_types.CHAT_DELETED, null))
-                        .catch((error) => console.warn('[平行叙事] 删除后同步聊天缓存失败：', error));
+                    let requestData = null;
+                    try {
+                        const body = args[1]?.body;
+                        requestData = typeof body === 'string' ? JSON.parse(body) : null;
+                    } catch { /* Ignore non-JSON delete requests. */ }
+                    const localKey = requestData?.avatar_url && requestData?.chatfile
+                        ? getChatEntryKey(requestData.avatar_url, requestData.chatfile)
+                        : null;
+                    if (localKey && pendingLocalDeleteKeys.has(localKey)) {
+                        // The extension applies its own deletion directly to the cached view.
+                        // Do not emit a second event that would trigger a full reload.
+                        pendingLocalDeleteKeys.delete(localKey);
+                    } else {
+                        Promise.resolve(eventSource.emit(event_types.CHAT_DELETED, null))
+                            .catch((error) => console.warn('[平行叙事] 删除后同步聊天缓存失败：', error));
+                    }
                 }
                 return response;
             };
