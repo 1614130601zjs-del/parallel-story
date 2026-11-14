@@ -247,3 +247,34 @@
     border-bottom: 0;
 }
 
+.parallel-story-item.is-active {
+    background: var(--SmartThemeBlurTintColor, rgba(89, 111, 112, .08));
+    border-radius: 7px;
+}
+
+.parallel-story-chat-error {
+    padding: 12px;
+    color: var(--SmartThemeQuoteColor, #858990);
+    font-size: 12px;
+}
+
+.parallel-story-group .parallel-story-item {
+    min-width: 0;
+}
+
+.parallel-story-group .parallel-story-open {
+    min-width: 0;
+}
+
+.parallel-story-group .parallel-story-item-meta {
+    max-width: 100%;
+}
+
+.parallel-story-group .parallel-story-actions button[data-action="delete-branch"] {
+    color: var(--SmartThemeQuoteColor, #858990);
+}
+
+.parallel-story-group .parallel-story-actions button[data-action="delete-branch"]:hover {
+    color: var(--SmartThemeEmColor, #9a5d5d);
+}
+
