@@ -89,7 +89,7 @@
     }
 
     function normalizeChatFile(fileName) {
-        return String(fileName ?? '').replace(/\\.jsonl$/i, '');
+        return String(fileName ?? '').replace(/\.jsonl$/i, '');
     }
 
     function getBranchForChat(character, fileName) {
