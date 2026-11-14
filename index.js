@@ -170,55 +170,13 @@
         document.getElementById(ROOT_ID)?.remove();
     }
 
-    function renderManager() {
+    async function renderManager() {
         closeManager();
 
         const store = getStore();
-        const currentScope = getCurrentScope();
-        const currentKey = JSON.stringify([currentScope.characterId, currentScope.chatFile]);
-        const branches = [...store.branches].sort((a, b) => b.createdAt - a.createdAt);
-        const grouped = new Map();
-
-        for (const branch of branches) {
-            const key = getBranchGroupKey(branch);
-            if (!grouped.has(key)) grouped.set(key, []);
-            grouped.get(key).push(branch);
-        }
-
-        const groupMarkup = [...grouped.entries()].map(([key, items]) => {
-            const first = items[0];
-            const legacy = !first.sourceCharacterName && !first.sourceCharacterId;
-            const characterName = legacy ? '旧版分支（来源待识别）' : (first.sourceCharacterName || '未知角色');
-            const chatFile = first.sourceChatFile ?? first.sourceChat ?? '';
-            const isCurrent = key === currentKey;
-            return `
-                <section class="parallel-story-group${isCurrent ? ' is-current' : ''}">
-                    <header class="parallel-story-group-header">
-                        <div class="parallel-story-group-title">${escapeHtml(characterName)}</div>
-                        <div class="parallel-story-group-meta">
-                            ${escapeHtml(chatFile ? `聊天记录：${chatFile}` : '聊天记录：未记录')}
-                            ${isCurrent ? '<span class="parallel-story-current-tag">当前聊天</span>' : ''}
-                        </div>
-                    </header>
-                    ${items.map((branch) => {
-                        const parent = branch.parentId
-                            ? store.branches.find((item) => item.id === branch.parentId)
-                            : null;
-                        return `
-                            <article class="parallel-story-item" data-id="${escapeHtml(branch.id)}">
-                                <button class="parallel-story-open" data-action="open" data-id="${escapeHtml(branch.id)}">
-                                    <span class="parallel-story-item-name">${escapeHtml(branch.name)}</span>
-                                    <span class="parallel-story-item-meta">${parent ? `来自「${escapeHtml(parent.name)}」` : '来自原始剧情'} · 第 ${Number(branch.sourceMessageId) + 1} 楼</span>
-                                </button>
-                                <div class="parallel-story-actions">
-                                    <button data-action="rename" data-id="${escapeHtml(branch.id)}" title="重命名">改名</button>
-                                    <button data-action="remove" data-id="${escapeHtml(branch.id)}" title="从管理器移除">移除</button>
-                                </div>
-                            </article>`;
-                    }).join('')}
-                </section>`;
-        }).join('');
-
+        const context = getContext();
+        const currentScope = getCurrentScope(context);
+        const currentKey = JSON.stringify([currentScope.characterAvatar, currentScope.chatFile]);
         const root = document.createElement('div');
         root.id = ROOT_ID;
         root.className = 'parallel-story-backdrop';
@@ -227,24 +185,99 @@
                 <header class="parallel-story-header">
                     <div>
                         <div class="parallel-story-title">平行叙事</div>
-                        <div class="parallel-story-subtitle">按角色和独立聊天记录整理剧情分支</div>
+                        <div class="parallel-story-subtitle">角色与聊天记录</div>
                     </div>
                     <button class="parallel-story-icon-button" data-action="close" aria-label="关闭">×</button>
                 </header>
                 <div class="parallel-story-toolbar">
-                    <button class="parallel-story-primary" data-action="create">＋ 创建当前楼层分支</button>
-                    <span class="parallel-story-count">${branches.length} 条分支</span>
+                    <button class="parallel-story-primary" data-action="create">＋ 从当前聊天创建分支</button>
+                    <span class="parallel-story-count">正在读取聊天记录…</span>
                 </div>
-                <div class="parallel-story-list">
-                    ${branches.length ? groupMarkup : '<div class="parallel-story-empty">还没有平行剧情<br><span>从当前聊天创建第一条分支</span></div>'}
-                </div>
-                <footer class="parallel-story-footer">每条分支会记录来源角色、聊天记录和楼层；聊天正文仍由酒馆原生功能保存。</footer>
+                <div class="parallel-story-list"><div class="parallel-story-empty">正在整理角色聊天记录</div></div>
+                <footer class="parallel-story-footer">原有聊天记录只作为入口读取，不会复制或另存正文。删除分支会同时删除酒馆原生聊天文件。</footer>
             </section>`;
         root.addEventListener('click', handleManagerClick);
         root.addEventListener('click', (event) => {
             if (event.target === root) closeManager();
         });
         document.body.append(root);
+
+        try {
+            const entries = await collectChatEntries();
+            if (!root.isConnected) return;
+
+            const grouped = new Map();
+            for (const entry of entries) {
+                const key = entry.error
+                    ? `error:${entry.characterId}`
+                    : String(entry.characterAvatar);
+                if (!grouped.has(key)) grouped.set(key, []);
+                grouped.get(key).push(entry);
+            }
+
+            const groupsMarkup = [...grouped.values()].map((items) => {
+                const first = items[0];
+                const isErrorGroup = Boolean(first.error);
+                const characterName = first.characterName || '未知角色';
+                const groupCurrent = items.some((item) =>
+                    !item.error && JSON.stringify([item.characterAvatar, item.fileName]) === currentKey
+                );
+                const rows = isErrorGroup
+                    ? `<div class="parallel-story-chat-error">${escapeHtml(first.error)}</div>`
+                    : items.sort((a, b) => b.fileName.localeCompare(a.fileName)).map((entry) => {
+                        const branch = getBranchForChat({ avatar: entry.characterAvatar }, entry.fileName);
+                        const legacyBranch = !branch ? store.branches.find((item) =>
+                            normalizeChatFile(item.chatFile) === entry.fileName
+                            && !item.sourceCharacterAvatar
+                            && String(item.sourceCharacterId ?? '') === entry.characterId
+                        ) : null;
+                        const isBranch = Boolean(branch || legacyBranch);
+                        const active = JSON.stringify([entry.characterAvatar, entry.fileName]) === currentKey;
+                        const title = branch?.name ?? legacyBranch?.name ?? entry.fileName;
+                        const branchMeta = branch || legacyBranch;
+                        const detail = isBranch
+                            ? `分支 · 来源第 ${Number(branchMeta.sourceMessageId) + 1} 楼`
+                            : '原生聊天记录';
+                        const branchId = branchMeta?.id ?? '';
+                        return `
+                            <article class="parallel-story-item${active ? ' is-active' : ''}">
+                                <button class="parallel-story-open" data-action="open-chat" data-character-id="${escapeHtml(entry.characterId)}" data-file="${escapeHtml(entry.fileName)}">
+                                    <span class="parallel-story-item-name">${escapeHtml(title)}</span>
+                                    <span class="parallel-story-item-meta">${escapeHtml(detail)}${active ? ' · 当前聊天' : ''}</span>
+                                </button>
+                                <div class="parallel-story-actions">
+                                    ${isBranch && branchId ? `
+                                        <button data-action="rename" data-id="${escapeHtml(branchId)}" title="重命名">改名</button>
+                                        <button data-action="delete-branch" data-id="${escapeHtml(branchId)}" title="删除分支及原生聊天">删除</button>
+                                    ` : ''}
+                                </div>
+                            </article>`;
+                    }).join('');
+
+                return `
+                    <section class="parallel-story-group${groupCurrent ? ' is-current' : ''}">
+                        <header class="parallel-story-group-header">
+                            <div class="parallel-story-group-title">${escapeHtml(characterName)}</div>
+                            <div class="parallel-story-group-meta">
+                                ${items.length} 份聊天记录
+                                ${groupCurrent ? '<span class="parallel-story-current-tag">当前角色</span>' : ''}
+                            </div>
+                        </header>
+                        ${rows || '<div class="parallel-story-empty">暂无聊天记录</div>'}
+                    </section>`;
+            }).join('');
+
+            const list = root.querySelector('.parallel-story-list');
+            const count = root.querySelector('.parallel-story-count');
+            count.textContent = `${entries.filter((item) => item.fileName).length} 份聊天记录`;
+            list.innerHTML = groupsMarkup || '<div class="parallel-story-empty">还没有可显示的聊天记录</div>';
+        } catch (error) {
+            console.error('[平行叙事] 读取聊天记录失败：', error);
+            const list = root.querySelector('.parallel-story-list');
+            if (list) list.innerHTML = `<div class="parallel-story-empty">${escapeHtml(error.message || '读取聊天记录失败')}</div>`;
+            const count = root.querySelector('.parallel-story-count');
+            if (count) count.textContent = '读取失败';
+        }
     }
 
     async function createCurrentBranch() {
