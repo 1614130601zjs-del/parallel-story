@@ -2,6 +2,13 @@
 
 SillyTavern extension: a native chat-record manager with optional parallel-story branch creation.
 
+## 1.3.0
+
+- Adds native chat rename for ordinary chats and parallel branches. Renaming updates the original SillyTavern chat file and synchronizes branch source references.
+- Adds native JSONL export for each chat record.
+- Adds per-character import using SillyTavern's native character-chat import function; imported records are stored by SillyTavern, not by this extension.
+- Existing chat messages remain in native SillyTavern storage; the extension does not copy or maintain a second chat archive.
+
 ## 1.2.0
 
 - Reads existing single-character chat records from SillyTavern and displays them as openable entries; message bodies are not copied or stored by this extension.
