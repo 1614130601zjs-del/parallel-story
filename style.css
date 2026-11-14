@@ -766,3 +766,72 @@
     margin: 0;
     vertical-align: middle;
 }
+
+
+/* Compact native-style ordinary chat rows: title and metadata remain content-sized. */
+.parallel-story-native-chat-item .parallel-story-native-title-row {
+    justify-content: flex-start !important;
+    width: auto !important;
+}
+.parallel-story-native-chat-item .parallel-story-native-title {
+    flex: 0 1 auto !important;
+    width: auto !important;
+    max-width: 100%;
+    justify-content: flex-start !important;
+    gap: 5px !important;
+}
+.parallel-story-native-chat-item .parallel-story-native-title > .select_chat_block_filename {
+    flex: 0 1 auto;
+    width: auto;
+    max-width: min(78vw, 720px);
+}
+.parallel-story-native-chat-item .parallel-story-native-meta {
+    display: inline-flex !important;
+    width: fit-content !important;
+    max-width: 100%;
+    flex: 0 0 auto !important;
+    flex-wrap: nowrap !important;
+    justify-content: flex-start !important;
+    align-self: flex-start !important;
+    gap: 5px !important;
+    white-space: nowrap;
+}
+.parallel-story-native-chat-item .parallel-story-native-meta > small {
+    flex: 0 0 auto;
+    margin: 0 !important;
+}
+.parallel-story-native-chat-item .parallel-story-svg-action {
+    box-sizing: border-box !important;
+    display: inline-flex !important;
+    flex: 0 0 23px !important;
+    width: 23px !important;
+    height: 23px !important;
+    min-width: 23px !important;
+    min-height: 23px !important;
+    max-width: 23px !important;
+    max-height: 23px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    align-items: center !important;
+    justify-content: center !important;
+    line-height: 1 !important;
+}
+.parallel-story-native-chat-item .parallel-story-svg-action > svg {
+    display: block !important;
+    box-sizing: border-box !important;
+    flex: 0 0 16px !important;
+    width: 16px !important;
+    height: 16px !important;
+    min-width: 16px !important;
+    min-height: 16px !important;
+    max-width: 16px !important;
+    max-height: 16px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    fill: none !important;
+    stroke: currentColor !important;
+    stroke-width: 1.8 !important;
+    stroke-linecap: round !important;
+    stroke-linejoin: round !important;
+    overflow: visible;
+}
