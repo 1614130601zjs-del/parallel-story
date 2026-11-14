@@ -40,3 +40,12 @@ Restart or reload the SillyTavern page after installation.
 ## Version
 
 1.0.0 — initial minimal manager.
+
+
+## 1.1.0
+
+- 分支索引按角色和独立聊天记录归类。
+- 新分支记录来源角色 ID、角色名称、聊天记录标识和来源楼层。
+- 管理器标记当前打开的聊天记录。
+- 不同角色或同一角色的不同聊天记录不会混在同一组。
+- 旧版本索引仍保留并显示在“旧版分支（来源待识别）”分组中；旧记录缺少的角色信息无法自动补回。
