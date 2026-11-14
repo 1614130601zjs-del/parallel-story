@@ -509,3 +509,23 @@
     opacity: .35;
     cursor: default;
 }
+
+
+/* Last-message preview in the character chat list only. */
+.parallel-story-last-message {
+    display: -webkit-box;
+    overflow: hidden;
+    width: 100%;
+    color: var(--SmartThemeBodyColor, #555b60);
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.55;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+.parallel-story-last-author {
+    color: var(--SmartThemeQuoteColor, #858990);
+    font-weight: 600;
+}
