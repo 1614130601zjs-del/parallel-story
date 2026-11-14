@@ -370,14 +370,18 @@
         }
     }
 
-    async function createCurrentBranch() {
+    async function createBranchFromMessage(sourceMessageId) {
         const context = getContext();
         if (!context?.chat?.length) {
             showNotice('当前聊天没有可供分支的楼层。', 'warning');
             return;
         }
 
-        const sourceMessageId = context.chat.length - 1;
+        sourceMessageId = Number(sourceMessageId);
+        if (!Number.isInteger(sourceMessageId) || sourceMessageId < 0 || sourceMessageId >= context.chat.length) {
+            showNotice('找不到对应楼层，无法创建分支。', 'warning');
+            return;
+        }
         const suggested = `第 ${sourceMessageId + 1} 楼分支`;
         const name = window.prompt('给这条平行剧情命名：', suggested)?.trim();
         if (!name) return;
@@ -413,6 +417,15 @@
             console.error('[平行叙事] 创建分支失败：', error);
             showNotice(error?.message ?? '创建分支失败，请检查控制台。', 'error');
         }
+    }
+
+    async function createCurrentBranch() {
+        const context = getContext();
+        if (!context?.chat?.length) {
+            showNotice('当前聊天没有可供分支的楼层。', 'warning');
+            return;
+        }
+        return createBranchFromMessage(context.chat.length - 1);
     }
 
     async function handleManagerClick(event) {
@@ -540,12 +553,41 @@
         return true;
     }
 
+    function installMessageBranchButtons() {
+        const chatRoot = document.getElementById('chat');
+        if (!chatRoot) return false;
+        const messages = chatRoot.querySelectorAll('.mes[mesid]:not([is_system="true"])');
+        for (const message of messages) {
+            const toolbar = message.querySelector('.mes_buttons');
+            if (!toolbar || toolbar.querySelector('.parallel-story-floor-branch')) continue;
+            const button = document.createElement('div');
+            button.className = 'mes_button parallel-story-floor-branch fa-solid fa-code-branch';
+            button.title = '从这一楼创建剧情分支';
+            button.setAttribute('role', 'button');
+            button.setAttribute('tabindex', '0');
+            button.setAttribute('aria-label', '从这一楼创建剧情分支');
+            const activate = (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                createBranchFromMessage(Number(message.getAttribute('mesid')));
+            };
+            button.addEventListener('click', activate);
+            button.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter' || event.key === ' ') activate(event);
+            });
+            toolbar.append(button);
+        }
+        return true;
+    }
+
     function init() {
         if (installMenuEntry()) return;
         const observer = new MutationObserver(() => {
-            if (installMenuEntry()) observer.disconnect();
+            installMenuEntry();
+            installMessageBranchButtons();
         });
         observer.observe(document.body, { childList: true, subtree: true });
+        installMessageBranchButtons();
         window.addEventListener('pagehide', () => observer.disconnect(), { once: true });
     }
 
