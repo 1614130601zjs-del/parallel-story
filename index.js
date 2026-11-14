@@ -696,8 +696,15 @@
                 const parentBranch = branchMeta.parentId
                     ? getStore().branches.find((item) => item.id === branchMeta.parentId)
                     : null;
-                const sourceLabel = parentBranch?.name || '主线';
-                const sourceDetail = `源自「${sourceLabel}」· 第 ${Number(branchMeta.sourceMessageId) + 1} 楼`;
+                const sourceChatFile = normalizeChatFile(branchMeta.sourceChatFile || branchMeta.sourceChat || '');
+                const sourceMainline = !parentBranch && sourceChatFile
+                    ? chats.find((item) => normalizeChatFile(item.fileName) === sourceChatFile)
+                    : null;
+                const sourceLabel = parentBranch?.name || sourceMainline?.fileName || branchMeta.sourceCharacterName || '主线';
+                const sourceFloor = Number.isInteger(Number(branchMeta.sourceMessageId))
+                    ? Number(branchMeta.sourceMessageId) + 1
+                    : '未知';
+                const sourceDetail = `来源：${sourceLabel} · 第 ${sourceFloor} 楼`;
                 return `
                     <article class="select_chat_block_wrapper parallel-story-native-chat-item parallel-story-branch-chat-item">
                         <div class="select_chat_block parallel-story-native-block${active ? ' is-current' : ''}"
