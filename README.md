@@ -2,6 +2,11 @@
 
 SillyTavern extension: a native chat-record manager with optional parallel-story branch creation.
 
+## 1.4.0
+
+- Adds a small branch icon to each rendered chat message action row. Clicking it creates a native SillyTavern branch from that exact message, records the branch metadata, and opens the new branch chat.
+- Keeps the manager's create-branch action as a shortcut for branching from the latest message.
+
 ## 1.3.0
 
 - Adds native chat rename for ordinary chats and parallel branches. Renaming updates the original SillyTavern chat file and synchronizes branch source references.
