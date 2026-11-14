@@ -186,6 +186,36 @@
         return String(fileName ?? '').replace(/\.jsonl$/i, '');
     }
 
+    function getBranchMessageSignature(message) {
+        return JSON.stringify([
+            Boolean(message?.is_user),
+            Boolean(message?.is_system),
+            String(message?.name ?? ''),
+            String(message?.mes ?? '').replace(/\r\n/g, '\n'),
+        ]);
+    }
+
+    function findBranchSourceMessageId(parentMessages, branchMessages) {
+        if (!Array.isArray(parentMessages) || !Array.isArray(branchMessages)) return null;
+        const parentFloors = parentMessages.slice(1);
+        const branchFloors = branchMessages.slice(1);
+        const sharedLength = Math.min(parentFloors.length, branchFloors.length);
+
+        for (let floorIndex = 0; floorIndex < sharedLength; floorIndex++) {
+            if (getBranchMessageSignature(parentFloors[floorIndex]) !== getBranchMessageSignature(branchFloors[floorIndex])) {
+                // The branch starts at the first changed floor; its source is
+                // the immediately preceding floor in the shared conversation.
+                return floorIndex > 0 ? floorIndex - 1 : null;
+            }
+        }
+
+        // A branch created after the final parent message may only extend it.
+        if (branchFloors.length > parentFloors.length && parentFloors.length > 0) {
+            return parentFloors.length - 1;
+        }
+        return null;
+    }
+
     function getBranchForChat(character, fileName) {
         const normalized = normalizeChatFile(fileName);
         return getStore().branches.find((branch) =>
@@ -271,6 +301,7 @@
                     author: message.is_user ? '用户' : (message.name || entry.characterName || '角色'),
                     messageCount: Math.max(0, messages.length - 1),
                     nativeMainChat,
+                    messages,
                 };
             }
             return { timestamp: 0, messageCount: Math.max(0, messages.length - 1), nativeMainChat };
@@ -292,6 +323,7 @@
                 entry.latestMessageAuthor = latest.author || '';
                 entry.messageCount = latest.messageCount ?? 0;
                 entry.nativeMainChat = latest.nativeMainChat || '';
+                entry._branchMessagesForRecovery = latest.messages || null;
             }
         };
         // Avoid flooding the Tavern API when a character has many chat files.
@@ -316,9 +348,10 @@
             if (existingBranch && existingBranch.sourceMessageId != null) continue;
             const sourceChatFile = normalizeChatFile(entry.nativeMainChat);
             let sourceMessageId = null;
-            // createBranch also appends the new branch filename to the source
-            // message's extra.branches array. Use that reverse link to recover
-            // the exact floor without modifying either native chat file.
+            let recoveredByContentDiff = false;
+            // Prefer the native reverse link when it exists. Some older or
+            // externally-created branch files do not retain extra.branches,
+            // so fall back to comparing the shared message sequence.
             try {
                 const parentResponse = await fetch('/api/chats/get', {
                     method: 'POST',
@@ -343,6 +376,14 @@
                                 break;
                             }
                         }
+
+                        if (sourceMessageId == null) {
+                            sourceMessageId = findBranchSourceMessageId(
+                                parentMessages,
+                                entry._branchMessagesForRecovery,
+                            );
+                            recoveredByContentDiff = sourceMessageId != null;
+                        }
                     }
                 }
             } catch (error) {
@@ -353,6 +394,7 @@
                 existingBranch.sourceChat = sourceChatFile;
                 existingBranch.sourceMessageId = sourceMessageId;
                 existingBranch.recoveredFromNativeMetadata = true;
+                existingBranch.recoveredByContentDiff = recoveredByContentDiff;
             } else {
                 store.branches.push({
                     id: makeId(),
@@ -367,10 +409,12 @@
                     sourceMessageId,
                     createdAt: 0,
                     recoveredFromNativeMetadata: true,
+                    recoveredByContentDiff,
                 });
             }
             restored++;
         }
+        for (const entry of entries) delete entry._branchMessagesForRecovery;
         if (restored) {
             saveStore();
             console.info('[平行叙事] 已从酒馆原生分支元数据恢复索引：', restored);
