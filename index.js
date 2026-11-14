@@ -707,12 +707,16 @@
                             <div class="select_chat_block_mes">${escapeHtml(preview)}</div>
                         </button>
                     </div>
-                    <div class="parallel-story-actions">
-                        <button data-action="rename-chat" data-character-id="${escapeHtml(entry.characterId)}" data-avatar="${escapeHtml(entry.characterAvatar)}" data-file="${escapeHtml(entry.fileName)}" title="重命名原生聊天记录">改名</button>
-                        <button data-action="export-chat" data-avatar="${escapeHtml(entry.characterAvatar)}" data-file="${escapeHtml(entry.fileName)}" title="导出原生 JSONL">导出</button>
+                    <div class="parallel-story-actions parallel-story-native-actions">
+                        <button class="parallel-story-svg-action" data-action="rename-chat" data-character-id="${escapeHtml(entry.characterId)}" data-avatar="${escapeHtml(entry.characterAvatar)}" data-file="${escapeHtml(entry.fileName)}" title="重命名原生聊天记录" aria-label="重命名">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg>
+                        </button>
+                        <button class="parallel-story-svg-action" data-action="export-chat" data-avatar="${escapeHtml(entry.characterAvatar)}" data-file="${escapeHtml(entry.fileName)}" title="导出原生 JSONL" aria-label="导出">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M12 18v-7"/><path d="m9 14 3-3 3 3"/></svg>
+                        </button>
                         ${!active && isBranch && branchMeta?.id
-                            ? `<button data-action="delete-branch" data-id="${escapeHtml(branchMeta.id)}" title="删除分支及原生聊天">删除</button>`
-                            : !active && !isBranch ? `<button data-action="delete-chat" data-character-id="${escapeHtml(entry.characterId)}" data-avatar="${escapeHtml(entry.characterAvatar)}" data-file="${escapeHtml(entry.fileName)}" title="删除原生聊天记录">删除</button>` : ''}
+                            ? `<button class="parallel-story-svg-action" data-action="delete-branch" data-id="${escapeHtml(branchMeta.id)}" title="删除分支及原生聊天" aria-label="删除"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="m19 6-1 14H6L5 6"/><path d="M10 11v5M14 11v5"/></svg></button>`
+                            : !active && !isBranch ? `<button class="parallel-story-svg-action" data-action="delete-chat" data-character-id="${escapeHtml(entry.characterId)}" data-avatar="${escapeHtml(entry.characterAvatar)}" data-file="${escapeHtml(entry.fileName)}" title="删除原生聊天记录" aria-label="删除"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="m19 6-1 14H6L5 6"/><path d="M10 11v5M14 11v5"/></svg></button>` : ''}
                     </div>
                 </article>`;
         }).join('');
