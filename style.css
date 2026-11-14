@@ -542,3 +542,75 @@
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
 }
+
+
+/* Keep the character chat list aligned with SillyTavern's native past-chat template. */
+.parallel-story-native-wrapper {
+    flex: 1 1 auto;
+    min-width: 0;
+    cursor: pointer;
+}
+.parallel-story-native-block {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    margin-top: 0;
+    padding: 5px 7px;
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 5px;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.parallel-story-native-block:hover {
+    background-color: var(--white30a);
+}
+.parallel-story-native-block[aria-current="true"] {
+    background-color: var(--cobalt30a);
+}
+.parallel-story-native-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 6px;
+}
+.parallel-story-native-title .select_chat_block_filename {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.parallel-story-native-block .select_chat_info {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 5px;
+}
+.parallel-story-native-block .select_chat_block_mes {
+    display: -webkit-box;
+    overflow: hidden;
+    width: 100%;
+    font-size: calc(var(--mainFontSize) - .25rem);
+    line-height: 1.45;
+    text-overflow: ellipsis;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+}
+.parallel-story-current-label {
+    flex: 0 0 auto;
+    opacity: .6;
+}
+.parallel-story-native-item .parallel-story-actions {
+    align-self: center;
+}
+@media (max-width: 520px) {
+    .parallel-story-native-block #select_chat_name_wrapper {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 3px;
+    }
+    .parallel-story-native-block .select_chat_info {
+        justify-content: flex-start;
+    }
+}
