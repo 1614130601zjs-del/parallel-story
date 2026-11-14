@@ -865,7 +865,14 @@
                                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14"/><path d="M9 7V5h6v2"/><path d="m18 7-1 12H7L6 7"/><path d="M10 10.5v5M14 10.5v5"/></svg>
                                 </button>` : ''}
                             </div>
-                            <div class="parallel-story-branch-source">${escapeHtml(sourceDetail)}</div>
+                            <div class="parallel-story-branch-source">
+                                <span>${escapeHtml(sourceDetail)}</span>
+                                ${hasSourceFloor && sourceChatFile ? `<button class="parallel-story-source-jump" data-action="jump-source-floor"
+                                    data-character-id="${escapeHtml(entry.characterId)}"
+                                    data-source-file="${escapeHtml(sourceChatFile)}"
+                                    data-index="${Number(branchMeta.sourceMessageId)}"
+                                    title="打开来源聊天并定位到分叉楼层">回到分叉楼层</button>` : ''}
+                            </div>
                             <div class="select_chat_block_mes">${escapeHtml(preview)}</div>
                         </div>
                     </article>`;
@@ -1148,6 +1155,28 @@
             if (root) {
                 root._floorPage = Number(button.dataset.page);
                 renderFloorPage(root);
+            }
+            return;
+        }
+
+        if (action === 'jump-source-floor') {
+            const root = document.getElementById(ROOT_ID);
+            const sourceFile = normalizeChatFile(button.dataset.sourceFile);
+            const entry = (root?._entries || []).find((item) =>
+                item.characterId === button.dataset.characterId
+                && normalizeChatFile(item.fileName) === sourceFile
+            );
+            const messageIndex = Number(button.dataset.index);
+            if (!entry || !Number.isInteger(messageIndex) || messageIndex < 0) {
+                showNotice('找不到分叉来源聊天或楼层，暂时无法定位。', 'warning');
+                return;
+            }
+            try {
+                await jumpToNativeFloor(entry, messageIndex);
+                closeManager();
+            } catch (error) {
+                console.error('[平行叙事] 返回分叉楼层失败：', error);
+                showNotice(error?.message || '无法返回分叉楼层。', 'error');
             }
             return;
         }
