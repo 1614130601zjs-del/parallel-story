@@ -675,19 +675,38 @@
             const detail = isBranch
                 ? `剧情分支 · 来源第 ${Number(branchMeta.sourceMessageId) + 1} 楼`
                 : '普通聊天';
+            const lastMessageDate = entry.latestMessageAt
+                ? new Date(Number(entry.latestMessageAt) < 1e12 ? Number(entry.latestMessageAt) * 1000 : Number(entry.latestMessageAt))
+                : null;
+            const nativeDate = lastMessageDate && !Number.isNaN(lastMessageDate.getTime())
+                ? new Intl.DateTimeFormat(undefined, {
+                    year: 'numeric', month: 'numeric', day: 'numeric',
+                    hour: '2-digit', minute: '2-digit', hour12: false,
+                }).format(lastMessageDate)
+                : '';
+            const preview = entry.latestMessagePreview
+                ? `${entry.latestMessageAuthor ? `${entry.latestMessageAuthor}：` : ''}${entry.latestMessagePreview}`
+                : '（暂无可预览的消息）';
             return `
-                <article class="parallel-story-item${active ? ' is-active' : ''}">
-                    <button class="parallel-story-open" data-action="open-chat" data-character-id="${escapeHtml(entry.characterId)}" data-file="${escapeHtml(entry.fileName)}">
-                        <span class="parallel-story-item-name">${escapeHtml(title)}</span>
-                        <span class="parallel-story-item-meta">
-                            <span>${escapeHtml(detail)} · ${Number(entry.messageCount || 0)} 条消息${active ? ' · 当前聊天' : ''}</span>
-                            ${entry.latestMessageAt ? `<time class="parallel-story-last-time" datetime="${escapeHtml(new Date(Number(entry.latestMessageAt) < 1e12 ? Number(entry.latestMessageAt) * 1000 : Number(entry.latestMessageAt)).toISOString())}">最后消息 ${escapeHtml(formatLastMessageTime(entry.latestMessageAt))}</time>` : ''}
-                        </span>
-                        <span class="parallel-story-last-message">
-                            ${entry.latestMessageAuthor ? `<span class="parallel-story-last-author">${escapeHtml(entry.latestMessageAuthor)}：</span>` : ''}
-                            ${escapeHtml(entry.latestMessagePreview || '（暂无可预览的消息）')}
-                        </span>
-                    </button>
+                <article class="parallel-story-item parallel-story-native-item${active ? ' is-active' : ''}">
+                    <div class="select_chat_block_wrapper flex-container parallel-story-native-wrapper">
+                        <div class="select_chat_block wide100p flex-container parallel-story-native-block" data-action="open-chat" data-character-id="${escapeHtml(entry.characterId)}" data-file="${escapeHtml(entry.fileName)}" role="button" tabindex="0">
+                            <div id="select_chat_name_wrapper" class="flex-container alignitemscenter justifySpaceBetween wide100p">
+                                <div class="flex-container alignItemsCenter parallel-story-native-title">
+                                    <small class="select_chat_block_filename select_chat_block_filename_item">${escapeHtml(title)}</small>
+                                    ${active ? '<small class="parallel-story-current-label">当前聊天</small>' : ''}
+                                </div>
+                                <div class="flex-container gap10px alignItemsCenter">
+                                    <div class="select_chat_info flex-container">
+                                        <small class="chat_messages_date select_chat_block_filename_item">${escapeHtml(nativeDate)}</small>
+                                        <small class="chat_file_size select_chat_block_filename_item">${escapeHtml(detail)}</small>
+                                        <small class="chat_messages_num select_chat_block_filename_item">(${Number(entry.messageCount || 0)})</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="select_chat_block_mes">${escapeHtml(preview)}</div>
+                        </div>
+                    </div>
                     <div class="parallel-story-actions">
                         <button data-action="rename-chat" data-character-id="${escapeHtml(entry.characterId)}" data-avatar="${escapeHtml(entry.characterAvatar)}" data-file="${escapeHtml(entry.fileName)}" title="重命名原生聊天记录">改名</button>
                         <button data-action="export-chat" data-avatar="${escapeHtml(entry.characterAvatar)}" data-file="${escapeHtml(entry.fileName)}" title="导出原生 JSONL">导出</button>
