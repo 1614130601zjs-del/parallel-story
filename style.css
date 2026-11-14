@@ -851,3 +851,47 @@
 .parallel-story-native-chat-item .parallel-story-native-meta > .chat_messages_num {
     font-size: 1em !important;
 }
+
+
+/* Give every ordinary chat a quiet, consistent frame around its full content. */
+.parallel-story-native-chat-item {
+    box-sizing: border-box !important;
+    margin: 0 0 10px !important;
+    padding: 0 !important;
+    border: 1px solid var(--SmartThemeBorderColor, rgba(128, 128, 128, .28)) !important;
+    border-radius: 9px !important;
+    overflow: hidden;
+    background: var(--SmartThemeBlurTintColor, rgba(128, 128, 128, .035));
+}
+.parallel-story-native-chat-item > .parallel-story-native-block {
+    box-sizing: border-box !important;
+    width: 100% !important;
+    min-width: 0;
+    padding: 10px 12px !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    gap: 5px !important;
+}
+.parallel-story-native-chat-item > .parallel-story-native-block.is-current {
+    background: var(--cobalt30a, rgba(120, 115, 220, .28)) !important;
+}
+.parallel-story-native-chat-item .parallel-story-native-meta {
+    gap: 2px !important;
+    column-gap: 2px !important;
+}
+.parallel-story-native-chat-item .parallel-story-native-meta > .chat_messages_date {
+    margin-right: 1px !important;
+}
+.parallel-story-native-chat-item .parallel-story-native-meta > .chat_messages_num {
+    margin: 0 2px 0 0 !important;
+}
+.parallel-story-native-chat-item .parallel-story-native-meta > .parallel-story-svg-action {
+    margin: 0 !important;
+}
+.parallel-story-native-chat-item .select_chat_block_mes {
+    margin-top: 1px;
+}
+.parallel-story-native-chat-item:has(> .parallel-story-native-block.is-current) {
+    border-color: var(--SmartThemeQuoteColor, rgba(120, 115, 220, .55)) !important;
+}
