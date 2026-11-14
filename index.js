@@ -739,7 +739,10 @@
                     ? chats.find((item) => normalizeChatFile(item.fileName) === sourceChatFile)
                     : null;
                 const sourceLabel = parentBranch?.name || sourceMainline?.fileName || branchMeta.sourceCharacterName || '主线';
-                const sourceFloor = Number.isInteger(Number(branchMeta.sourceMessageId))
+                const hasSourceFloor = branchMeta.sourceMessageId !== null
+                    && branchMeta.sourceMessageId !== undefined
+                    && branchMeta.sourceMessageId !== '';
+                const sourceFloor = hasSourceFloor && Number.isInteger(Number(branchMeta.sourceMessageId))
                     ? Number(branchMeta.sourceMessageId) + 1
                     : '未知';
                 const sourceDetail = `来源：${sourceLabel} · 第 ${sourceFloor} 楼`;
