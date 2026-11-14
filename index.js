@@ -711,9 +711,6 @@
                     body: JSON.stringify({ chatfile: `${fileName}.jsonl`, avatar_url: avatar }),
                 });
                 if (!response.ok) throw new Error(`酒馆删除聊天文件失败（${response.status}）`);
-                if (context.eventSource && context.eventTypes?.CHAT_DELETED) {
-                    await context.eventSource.emit(context.eventTypes.CHAT_DELETED, fileName);
-                }
                 const removedIds = store.branches.filter((item) =>
                     normalizeChatFile(item.chatFile) === fileName
                     && (item.sourceCharacterAvatar ? item.sourceCharacterAvatar === avatar : String(item.sourceCharacterId ?? '') === String(characterId))
@@ -823,9 +820,6 @@
                     throw new Error(`酒馆删除聊天文件失败（${response.status}）`);
                 }
 
-                if (context.eventSource && context.eventTypes?.CHAT_DELETED) {
-                    await context.eventSource.emit(context.eventTypes.CHAT_DELETED, branchFile);
-                }
                 store.branches = store.branches.filter((item) => item.id !== id);
                 // Children remain available, but are no longer shown as descendants of a deleted parent.
                 for (const child of store.branches) {
@@ -912,6 +906,26 @@
 
         for (const eventName of chatListEvents) {
             eventSource.on(eventName, syncChatEntries);
+        }
+
+        // The native welcome-screen delete flow may not emit CHAT_DELETED
+        // for ordinary character chats. Observe successful delete requests too.
+        const originalFetch = window.fetch;
+        if (typeof originalFetch === 'function' && !originalFetch.__parallelStoryChatSync) {
+            const syncedFetch = async function (...args) {
+                const request = args[0];
+                const requestUrl = String(
+                    typeof request === 'string' ? request : (request?.url ?? request ?? '')
+                );
+                const response = await originalFetch.apply(this, args);
+                if (response.ok && requestUrl.includes('/api/chats/delete')) {
+                    Promise.resolve(eventSource.emit(event_types.CHAT_DELETED, null))
+                        .catch((error) => console.warn('[平行叙事] 删除后同步聊天缓存失败：', error));
+                }
+                return response;
+            };
+            syncedFetch.__parallelStoryChatSync = true;
+            window.fetch = syncedFetch;
         }
 
         window.addEventListener('pagehide', () => {
