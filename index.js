@@ -581,13 +581,13 @@
     }
 
     function init() {
-        if (installMenuEntry()) return;
+        installMenuEntry();
+        installMessageBranchButtons();
         const observer = new MutationObserver(() => {
             installMenuEntry();
             installMessageBranchButtons();
         });
         observer.observe(document.body, { childList: true, subtree: true });
-        installMessageBranchButtons();
         window.addEventListener('pagehide', () => observer.disconnect(), { once: true });
     }
 
