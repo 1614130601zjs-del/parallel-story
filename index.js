@@ -937,7 +937,6 @@
                 isCarryover(meta)
                 && meta.sourceCharacterAvatar === parentEntry.characterAvatar
                 && normalizeChatFile(meta.sourceChatFile || meta.sourceChat) === parentFile
-                && (parentBranchMeta ? meta.parentId === parentBranchMeta.id : !meta.parentId)
             );
             const children = childMetas.map(meta => {
                 const childEntry = chats.find(item => normalizeChatFile(item.fileName) === normalizeChatFile(meta.chatFile));
