@@ -1155,3 +1155,21 @@
 .parallel-story-character-search::placeholder {
     color: #888888;
 }
+
+
+/* 柏宝书「带数据创建新对话」：在来源聊天记录下显示为层级子记录。 */
+.parallel-story-carryover-children {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 6px 0 2px 14px;
+    padding-left: 10px;
+    border-left: 2px solid #d8d8d8;
+}
+.parallel-story-carryover-node {
+    min-width: 0;
+}
+.parallel-story-carryover-node > .parallel-story-carryover-children {
+    margin-left: 12px;
+    border-left-color: #e6e6e6;
+}
