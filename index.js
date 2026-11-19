@@ -949,6 +949,12 @@
                     ? new Intl.DateTimeFormat(undefined, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).format(childDate)
                     : '';
                 const childTitle = meta.name || childEntry.fileName;
+                const sourceChatFile = normalizeChatFile(meta.sourceChatFile || meta.sourceChat || '');
+                const sourceEntry = chats.find(item => normalizeChatFile(item.fileName) === sourceChatFile);
+                const sourceMeta = sourceEntry
+                    ? getBranchForChat({ avatar: sourceEntry.characterAvatar }, sourceEntry.fileName)
+                    : null;
+                const sourceLabel = sourceMeta?.name || sourceEntry?.fileName || meta.sourceCharacterName || '主线';
                 const sourceFloor = meta.sourceMessageId != null && meta.sourceMessageId !== ''
                     && Number.isInteger(Number(meta.sourceMessageId)) && Number(meta.sourceMessageId) >= 0
                     ? Number(meta.sourceMessageId) + 1
@@ -980,7 +986,7 @@
                                     </button>` : ''}
                                 </div>
                                 <div class="parallel-story-branch-source">
-                                    <span>柏宝书携带新对话 · 来源第 ${sourceFloor} 楼</span>
+                                    <span>来自 ${escapeHtml(sourceLabel)} · 第 ${sourceFloor} 楼</span>
                                     ${sourceFloor !== '未知' ? `<button class="parallel-story-source-jump" data-action="jump-source-floor" data-character-id="${escapeHtml(childEntry.characterId)}" data-source-file="${escapeHtml(normalizeChatFile(meta.sourceChatFile || meta.sourceChat))}" data-index="${Number(meta.sourceMessageId)}" title="回到来源聊天楼层">回到来源楼层</button>` : ''}
                                 </div>
                                 <div class="select_chat_block_mes">${escapeHtml(childPreview)}</div>
