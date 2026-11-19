@@ -435,10 +435,13 @@
             // Older recovery builds may already have saved the branch index with
             // sourceMessageId=null. Retry those records instead of treating the
             // incomplete index as fully recovered.
-            if (existingBranch && existingBranch.sourceMessageId != null && !existingBranch.recoveredByContentDiff) continue;
+            if (existingBranch && existingBranch.sourceMessageId != null && !existingBranch.recoveredByContentDiff
+                && (!entry.nativeArchiveCarryover || existingBranch.origin === 'baibaishu-carryover')) continue;
             const carryover = entry.nativeArchiveCarryover;
             const sourceChatFile = normalizeChatFile(carryover?.sourceChatFile || entry.nativeMainChat);
-            let sourceMessageId = Number.isInteger(Number(carryover?.sourceMessageId)) && Number(carryover?.sourceMessageId) >= 0
+            let sourceMessageId = carryover?.sourceMessageId != null
+                && Number.isInteger(Number(carryover.sourceMessageId))
+                && Number(carryover.sourceMessageId) >= 0
                 ? Number(carryover.sourceMessageId)
                 : null;
             let recoveredByContentDiff = false;
