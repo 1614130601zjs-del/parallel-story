@@ -1,5 +1,9 @@
 # 档案（Archive）
 
+## 1.6.37
+
+- 与柏宝书联动：带数据创建的新聊天会作为来源记录下的层级子记录显示，可继续嵌套，并保留回到来源楼层的定位。
+
 SillyTavern extension: a native chat-record manager with optional story-branch creation.
 
 ## 1.6.36
