@@ -950,7 +950,8 @@
                     ? new Intl.DateTimeFormat(undefined, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).format(childDate)
                     : '';
                 const childTitle = meta.name || childEntry.fileName;
-                const sourceFloor = Number.isInteger(Number(meta.sourceMessageId)) && Number(meta.sourceMessageId) >= 0
+                const sourceFloor = meta.sourceMessageId != null && meta.sourceMessageId !== ''
+                    && Number.isInteger(Number(meta.sourceMessageId)) && Number(meta.sourceMessageId) >= 0
                     ? Number(meta.sourceMessageId) + 1
                     : '未知';
                 const childPreview = childEntry.latestMessagePreview
