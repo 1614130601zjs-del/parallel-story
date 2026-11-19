@@ -175,11 +175,77 @@
     function getCurrentBranchId() {
         const scope = getCurrentScope();
         return getStore().branches.find((item) =>
-            item.chatFile === scope.chatFile
+            normalizeChatFile(item.chatFile) === normalizeChatFile(scope.chatFile)
             && (item.sourceCharacterAvatar
                 ? item.sourceCharacterAvatar === scope.characterAvatar
                 : String(item.sourceCharacterId ?? '') === scope.characterId)
         )?.id ?? null;
+    }
+
+    function registerCarryoverChat(payload = {}) {
+        const context = getContext();
+        const avatar = String(payload.characterAvatar ?? '');
+        const sourceChatFile = normalizeChatFile(payload.sourceChatFile);
+        const chatFile = normalizeChatFile(payload.chatFile);
+        if (!avatar || !sourceChatFile || !chatFile || sourceChatFile === chatFile) return false;
+
+        const characterId = String(payload.characterId ?? context?.characters?.findIndex(item => item?.avatar === avatar) ?? '');
+        const character = getCharacter(context, characterId);
+        const store = getStore();
+        let branch = store.branches.find(item =>
+            normalizeChatFile(item.chatFile) === chatFile
+            && item.sourceCharacterAvatar === avatar
+        );
+        const parentBranch = store.branches.find(item =>
+            normalizeChatFile(item.chatFile) === sourceChatFile
+            && item.sourceCharacterAvatar === avatar
+        );
+        const sourceMessageId = Number(payload.sourceMessageId);
+        if (!branch) {
+            branch = {
+                id: makeId(),
+                name: String(payload.name || '柏宝书新对话'),
+                chatFile,
+                parentId: parentBranch?.id ?? null,
+                sourceCharacterId: characterId,
+                sourceCharacterName: String(payload.characterName || character?.name || context?.name2 || '未知角色'),
+                sourceCharacterAvatar: avatar,
+                sourceChatFile,
+                sourceChat: sourceChatFile,
+                sourceMessageId: Number.isInteger(sourceMessageId) && sourceMessageId >= 0 ? sourceMessageId : null,
+                createdAt: Number(payload.createdAt) || Date.now(),
+                origin: 'baibaishu-carryover',
+            };
+            store.branches.push(branch);
+        } else {
+            branch.sourceChatFile = sourceChatFile;
+            branch.sourceChat = sourceChatFile;
+            branch.parentId = parentBranch?.id ?? null;
+            branch.sourceMessageId = Number.isInteger(sourceMessageId) && sourceMessageId >= 0 ? sourceMessageId : branch.sourceMessageId ?? null;
+            branch.origin = 'baibaishu-carryover';
+        }
+        saveStore();
+        invalidateChatEntriesCache();
+
+        const root = document.getElementById(ROOT_ID);
+        if (root?.isConnected) {
+            void getCachedChatEntries().then(entries => {
+                if (!root.isConnected) return;
+                root._entries = entries;
+                const selectedCharacterId = root.dataset.selectedCharacterId;
+                if (selectedCharacterId !== undefined) renderCharacterChats(root, entries, selectedCharacterId);
+                else renderCharacterCards(root, entries);
+            }).catch(error => console.warn('[档案] 同步柏宝书新记录失败：', error));
+        }
+        return true;
+    }
+
+    function installPublicApi() {
+        const api = window.ArchiveManager ?? {};
+        api.apiVersion = 1;
+        api.registerCarryoverChat = registerCarryoverChat;
+        window.ArchiveManager = api;
+        window.dispatchEvent(new CustomEvent('archive-manager:ready', { detail: { apiVersion: 1 } }));
     }
 
     function normalizeChatFile(fileName) {
@@ -307,6 +373,10 @@
             // store their parent chat name in chat_metadata.main_chat. This is
             // the durable recovery source if the extension settings index is lost.
             const nativeMainChat = String(messages[0]?.chat_metadata?.main_chat ?? '').trim();
+            const nativeArchiveCarryover = messages[0]?.chat_metadata?.archive_carryover
+                && typeof messages[0].chat_metadata.archive_carryover === 'object'
+                ? messages[0].chat_metadata.archive_carryover
+                : null;
             for (let index = messages.length - 1; index >= 1; index--) {
                 const message = messages[index];
                 if (!message || message.is_system) continue;
@@ -319,10 +389,11 @@
                     author: message.is_user ? '用户' : (message.name || entry.characterName || '角色'),
                     messageCount: Math.max(0, messages.length - 1),
                     nativeMainChat,
+                    nativeArchiveCarryover,
                     messages,
                 };
             }
-            return { timestamp: 0, messageCount: Math.max(0, messages.length - 1), nativeMainChat };
+            return { timestamp: 0, messageCount: Math.max(0, messages.length - 1), nativeMainChat, nativeArchiveCarryover };
         } catch (error) {
             console.warn('[平行叙事] 读取聊天最后消息失败：', entry.fileName, error);
             return { timestamp: 0 };
@@ -341,6 +412,7 @@
                 entry.latestMessageAuthor = latest.author || '';
                 entry.messageCount = latest.messageCount ?? 0;
                 entry.nativeMainChat = latest.nativeMainChat || '';
+                entry.nativeArchiveCarryover = latest.nativeArchiveCarryover || null;
                 entry._branchMessagesForRecovery = latest.messages || null;
             }
         };
@@ -353,7 +425,7 @@
         const store = getStore();
         let restored = 0;
         for (const entry of entries) {
-            if (!entry.fileName || !entry.nativeMainChat) continue;
+            if (!entry.fileName || (!entry.nativeMainChat && !entry.nativeArchiveCarryover)) continue;
             const existingBranch = store.branches.find((branch) =>
                 normalizeChatFile(branch.chatFile) === normalizeChatFile(entry.fileName)
                 && (branch.sourceCharacterAvatar
@@ -364,14 +436,19 @@
             // sourceMessageId=null. Retry those records instead of treating the
             // incomplete index as fully recovered.
             if (existingBranch && existingBranch.sourceMessageId != null && !existingBranch.recoveredByContentDiff) continue;
-            const sourceChatFile = normalizeChatFile(entry.nativeMainChat);
-            let sourceMessageId = null;
+            const carryover = entry.nativeArchiveCarryover;
+            const sourceChatFile = normalizeChatFile(carryover?.sourceChatFile || entry.nativeMainChat);
+            let sourceMessageId = Number.isInteger(Number(carryover?.sourceMessageId)) && Number(carryover?.sourceMessageId) >= 0
+                ? Number(carryover.sourceMessageId)
+                : null;
             let recoveredByContentDiff = false;
             // Prefer the native reverse link when it exists. Some older or
             // externally-created branch files do not retain extra.branches,
             // so fall back to comparing the shared message sequence.
             try {
-                const parentResponse = await fetch('/api/chats/get', {
+                const parentResponse = sourceMessageId !== null
+                    ? null
+                    : await fetch('/api/chats/get', {
                     method: 'POST',
                     headers: getRequestHeaders(),
                     body: JSON.stringify({
@@ -380,7 +457,7 @@
                         avatar_url: entry.characterAvatar,
                     }),
                 });
-                if (parentResponse.ok) {
+                if (parentResponse?.ok) {
                     const parentMessages = await parentResponse.json();
                     if (Array.isArray(parentMessages)) {
                         for (let messageIndex = 1; messageIndex < parentMessages.length; messageIndex++) {
@@ -411,6 +488,7 @@
                 existingBranch.sourceChatFile = sourceChatFile;
                 existingBranch.sourceChat = sourceChatFile;
                 existingBranch.sourceMessageId = sourceMessageId;
+                if (carryover) existingBranch.origin = 'baibaishu-carryover';
                 existingBranch.recoveredFromNativeMetadata = true;
                 existingBranch.recoveredByContentDiff = recoveredByContentDiff;
             } else {
@@ -418,7 +496,10 @@
                     id: makeId(),
                     name: entry.fileName,
                     chatFile: entry.fileName,
-                    parentId: null,
+                    parentId: carryover
+                        ? (store.branches.find(item => normalizeChatFile(item.chatFile) === sourceChatFile
+                            && item.sourceCharacterAvatar === entry.characterAvatar)?.id ?? null)
+                        : null,
                     sourceCharacterId: entry.characterId,
                     sourceCharacterName: entry.characterName,
                     sourceCharacterAvatar: entry.characterAvatar,
@@ -428,6 +509,7 @@
                     createdAt: 0,
                     recoveredFromNativeMetadata: true,
                     recoveredByContentDiff,
+                    ...(carryover ? { origin: 'baibaishu-carryover' } : {}),
                 });
             }
             restored++;
@@ -838,9 +920,74 @@
             ) : null;
             return { entry, branchMeta: branch || legacyBranch };
         });
+        const isCarryover = (meta) => meta?.origin === 'baibaishu-carryover';
         const mainCount = classifiedChats.filter((item) => item.entry.fileName && !item.branchMeta).length;
-        const branchCount = classifiedChats.filter((item) => item.entry.fileName && item.branchMeta).length;
-        const visibleChats = classifiedChats.filter((item) => selectedGroup === 'branch' ? item.branchMeta : !item.branchMeta);
+        const branchCount = classifiedChats.filter((item) => item.entry.fileName && item.branchMeta && !isCarryover(item.branchMeta)).length;
+        const visibleChats = classifiedChats.filter((item) => selectedGroup === 'branch'
+            ? item.branchMeta && !isCarryover(item.branchMeta)
+            : !item.branchMeta);
+
+        const renderCarryoverChildren = (parentEntry, parentBranchMeta = null, depth = 1) => {
+            if (depth > 8) return '';
+            const parentFile = normalizeChatFile(parentEntry.fileName);
+            const childMetas = getStore().branches.filter(meta =>
+                isCarryover(meta)
+                && meta.sourceCharacterAvatar === parentEntry.characterAvatar
+                && normalizeChatFile(meta.sourceChatFile || meta.sourceChat) === parentFile
+                && (parentBranchMeta ? meta.parentId === parentBranchMeta.id : !meta.parentId)
+            );
+            const children = childMetas.map(meta => {
+                const childEntry = chats.find(item => normalizeChatFile(item.fileName) === normalizeChatFile(meta.chatFile));
+                if (!childEntry) return '';
+                const childActive = JSON.stringify([childEntry.characterAvatar, childEntry.fileName]) === currentKey;
+                const childDate = childEntry.latestMessageAt
+                    ? new Date(Number(childEntry.latestMessageAt) < 1e12 ? Number(childEntry.latestMessageAt) * 1000 : Number(childEntry.latestMessageAt))
+                    : null;
+                const childDateLabel = childDate && !Number.isNaN(childDate.getTime())
+                    ? new Intl.DateTimeFormat(undefined, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).format(childDate)
+                    : '';
+                const childTitle = meta.name || childEntry.fileName;
+                const sourceFloor = Number.isInteger(Number(meta.sourceMessageId)) && Number(meta.sourceMessageId) >= 0
+                    ? Number(meta.sourceMessageId) + 1
+                    : '未知';
+                const childPreview = childEntry.latestMessagePreview
+                    ? `${childEntry.latestMessageAuthor ? `${childEntry.latestMessageAuthor}：` : ''}${childEntry.latestMessagePreview}`
+                    : '（暂无可预览的消息）';
+                return `
+                    <div class="parallel-story-carryover-node">
+                        <article class="select_chat_block_wrapper parallel-story-native-chat-item parallel-story-branch-chat-item">
+                            <div class="select_chat_block parallel-story-native-block${childActive ? ' is-current' : ''}"
+                                data-action="open-chat" data-character-id="${escapeHtml(childEntry.characterId)}"
+                                data-file="${escapeHtml(childEntry.fileName)}" role="button" tabindex="0"
+                                aria-current="${childActive ? 'true' : 'false'}">
+                                <div class="parallel-story-native-title-row">
+                                    <div class="parallel-story-native-title"><small class="select_chat_block_filename select_chat_block_filename_item">${escapeHtml(childTitle)}</small></div>
+                                </div>
+                                <div class="parallel-story-native-meta">
+                                    <small class="chat_messages_date select_chat_block_filename_item">${escapeHtml(childDateLabel)}</small>
+                                    <small class="chat_messages_num select_chat_block_filename_item">(${Number(childEntry.messageCount || 0)})</small>
+                                    <button class="parallel-story-svg-action" data-action="rename-chat" data-character-id="${escapeHtml(childEntry.characterId)}" data-avatar="${escapeHtml(childEntry.characterAvatar)}" data-file="${escapeHtml(childEntry.fileName)}" title="重命名子记录" aria-label="重命名">
+                                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5 5 15l10.9-10.9a2.1 2.1 0 0 1 3 3L8 18Z"/><path d="M4 19.5 8 18"/></svg>
+                                    </button>
+                                    <button class="parallel-story-svg-action" data-action="export-chat" data-avatar="${escapeHtml(childEntry.characterAvatar)}" data-file="${escapeHtml(childEntry.fileName)}" title="导出子记录 JSONL" aria-label="导出">
+                                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4.5h8l4 4v11H6Z"/><path d="M14 4.5v4h4"/><path d="M12 17v-6"/><path d="m9.5 13.5 2.5-2.5 2.5 2.5"/></svg>
+                                    </button>
+                                    ${!childActive ? `<button class="parallel-story-svg-action" data-action="delete-branch" data-id="${escapeHtml(meta.id || '')}" data-avatar="${escapeHtml(childEntry.characterAvatar)}" data-character-id="${escapeHtml(childEntry.characterId)}" data-file="${escapeHtml(childEntry.fileName)}" title="删除子记录及原生聊天" aria-label="删除">
+                                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14"/><path d="M9 7V5h6v2"/><path d="m18 7-1 12H7L6 7"/><path d="M10 10.5v5M14 10.5v5"/></svg>
+                                    </button>` : ''}
+                                </div>
+                                <div class="parallel-story-branch-source">
+                                    <span>柏宝书携带新对话 · 来源第 ${sourceFloor} 楼</span>
+                                    ${sourceFloor !== '未知' ? `<button class="parallel-story-source-jump" data-action="jump-source-floor" data-character-id="${escapeHtml(childEntry.characterId)}" data-source-file="${escapeHtml(normalizeChatFile(meta.sourceChatFile || meta.sourceChat))}" data-index="${Number(meta.sourceMessageId)}" title="回到来源聊天楼层">回到来源楼层</button>` : ''}
+                                </div>
+                                <div class="select_chat_block_mes">${escapeHtml(childPreview)}</div>
+                            </div>
+                        </article>
+                        ${renderCarryoverChildren(childEntry, meta, depth + 1)}
+                    </div>`;
+            }).join('');
+            return children ? `<div class="parallel-story-carryover-children">${children}</div>` : '';
+        };
 
         const rows = visibleChats.map(({ entry, branchMeta }) => {
             if (entry.error) return `<div class="parallel-story-chat-error">${escapeHtml(entry.error)}</div>`;
@@ -918,7 +1065,8 @@
                             </div>
                             <div class="select_chat_block_mes">${escapeHtml(preview)}</div>
                         </div>
-                    </article>`;
+                    </article>${renderCarryoverChildren(entry, branchMeta)}
+                    `;
             }
 
             return `
@@ -953,7 +1101,7 @@
                         </div>
                         <div class="select_chat_block_mes">${escapeHtml(preview)}</div>
                     </div>
-                </article>`;
+                </article>${renderCarryoverChildren(entry, null)}`;
         }).join('');
 
         if (list) list.innerHTML = `
@@ -1409,6 +1557,7 @@
     }
 
     function init() {
+        installPublicApi();
         installMenuEntry();
         installMessageBranchButtons();
         installNativeChatSync().catch((error) => {
