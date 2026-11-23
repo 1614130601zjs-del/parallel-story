@@ -1294,9 +1294,7 @@
 }
 .parallel-story-floor-branch-wrap .parallel-story-floor-branch { cursor: pointer; }
 .parallel-story-message-action-menu {
-    position: absolute;
-    right: 0;
-    top: calc(100% + 5px);
+    position: fixed;
     z-index: 2147483647;
     display: none;
     flex-direction: column;
