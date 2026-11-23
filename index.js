@@ -1708,11 +1708,36 @@
             const menu = document.createElement('div');
             menu.className = 'parallel-story-message-action-menu';
             menu.innerHTML = '<button type="button" data-floor-menu-action="branch">创建分支</button><button type="button" data-floor-menu-action="favorite">收藏这一楼</button><button type="button" data-floor-menu-action="export">导出这一楼</button>';
-            const closeMenu = () => menu.classList.remove('is-open');
+            let outsidePointerHandler = null;
+            const closeMenu = () => {
+                menu.classList.remove('is-open');
+                menu.remove();
+                if (outsidePointerHandler) {
+                    document.removeEventListener('pointerdown', outsidePointerHandler, true);
+                    outsidePointerHandler = null;
+                }
+            };
             const toggleMenu = (event) => {
                 event.preventDefault(); event.stopPropagation();
-                document.querySelectorAll('.parallel-story-message-action-menu.is-open').forEach((item) => { if (item !== menu) item.classList.remove('is-open'); });
-                menu.classList.toggle('is-open');
+                document.querySelectorAll('.parallel-story-message-action-menu.is-open').forEach((item) => {
+                    item.classList.remove('is-open');
+                    item.remove();
+                });
+                if (menu.classList.contains('is-open')) {
+                    closeMenu();
+                    return;
+                }
+                document.body.append(menu);
+                const rect = button.getBoundingClientRect();
+                menu.style.position = 'fixed';
+                menu.style.zIndex = '2147483647';
+                menu.style.left = Math.max(8, Math.min(rect.right - 140, window.innerWidth - 148)) + 'px';
+                menu.style.top = Math.min(rect.bottom + 5, window.innerHeight - 120) + 'px';
+                menu.classList.add('is-open');
+                outsidePointerHandler = (pointerEvent) => {
+                    if (!menu.contains(pointerEvent.target) && !button.contains(pointerEvent.target)) closeMenu();
+                };
+                document.addEventListener('pointerdown', outsidePointerHandler, true);
             };
             button.addEventListener('click', toggleMenu);
             button.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') toggleMenu(event); });
@@ -1739,7 +1764,7 @@
                     showFloorExportSettings(host, index, swipe, entry, context.chat);
                 }
             });
-            wrap.append(button, menu);
+            wrap.append(button);
             toolbar.append(wrap);
         }
         return true;
