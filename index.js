@@ -56,11 +56,10 @@
 
     function getStore() {
         window.extension_settings ??= {};
-        window.extension_settings[EXTENSION_KEY] ??= { branches: [], favorites: [], exportSettings: {} };
+        window.extension_settings[EXTENSION_KEY] ??= { branches: [], favorites: [] };
         const store = window.extension_settings[EXTENSION_KEY];
         if (!Array.isArray(store.branches)) store.branches = [];
         if (!Array.isArray(store.favorites)) store.favorites = [];
-        if (!store.exportSettings || typeof store.exportSettings !== 'object') store.exportSettings = {};
         return store;
     }
 
@@ -69,9 +68,6 @@
     }
 
 
-    function getExportSettings() {
-        return Object.assign({ theme: 'native', width: 860, padding: 32, background: '#f4f4f4', customCss: '', showAuthor: true, showFloor: true }, getStore().exportSettings);
-    }
     function getFloorSwipeList(message) {
         const swipes = Array.isArray(message && message.swipes) && message.swipes.length ? message.swipes : [message && message.mes || ''];
         const current = Number.isInteger(Number(message && message.swipe_id)) ? Number(message.swipe_id) : 0;
@@ -102,267 +98,6 @@
         }
         saveStore(); renderFloorPage(root);
     }
-    function loadHtml2Canvas() {
-        if (typeof window.html2canvas === 'function') return Promise.resolve(window.html2canvas);
-        if (window.__parallelStoryHtml2CanvasPromise) return window.__parallelStoryHtml2CanvasPromise;
-        window.__parallelStoryHtml2CanvasPromise = new Promise((resolve, reject) => {
-            const script = document.createElement('script');
-            script.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
-            script.async = true;
-            script.onload = () => typeof window.html2canvas === 'function' ? resolve(window.html2canvas) : reject(new Error('截图组件加载失败'));
-            script.onerror = () => reject(new Error('无法加载图片导出组件，请检查网络连接后重试'));
-            document.head.append(script);
-        }).catch((error) => { window.__parallelStoryHtml2CanvasPromise = null; throw error; });
-        return window.__parallelStoryHtml2CanvasPromise;
-    }
-
-    function scopeExportCss(cssText) {
-        if (!String(cssText || '').trim()) return '';
-        const parser = document.createElement('style');
-        parser.textContent = String(cssText);
-        document.head.append(parser);
-        try {
-            const renderRules = (rules) => Array.from(rules || []).map((rule) => {
-                if (rule.type === 1 && rule.selectorText) {
-                    const selectors = rule.selectorText.split(',').map((selector) => {
-                        const value = selector.trim();
-                        return value.startsWith('.ps-export-stage') ? value : '.ps-export-stage ' + value;
-                    }).join(', ');
-                    return selectors + '{' + rule.style.cssText + '}';
-                }
-                if ((rule.type === 4 || rule.type === 12) && rule.cssRules) {
-                    const prefix = rule.cssText.slice(0, rule.cssText.indexOf('{'));
-                    return prefix + '{' + renderRules(rule.cssRules) + '}';
-                }
-                return rule.cssText || '';
-            }).join('\n');
-            return parser.sheet ? renderRules(parser.sheet.cssRules) : '';
-        } catch (error) {
-            console.warn('[档案] 自定义 CSS 解析失败：', error);
-            return '';
-        } finally {
-            parser.remove();
-        }
-    }
-
-    function copyExportStylesToFrame(frameDocument) {
-        const pending = [];
-        document.querySelectorAll('link[rel~="stylesheet"], style').forEach((sourceNode) => {
-            const clone = sourceNode.cloneNode(true);
-            if (clone.tagName === 'LINK') {
-                pending.push(new Promise((resolve) => {
-                    let settled = false;
-                    const finish = () => { if (settled) return; settled = true; resolve(); };
-                    clone.addEventListener('load', finish, { once: true });
-                    clone.addEventListener('error', finish, { once: true });
-                    setTimeout(finish, 4500);
-                }));
-            }
-            frameDocument.head.append(clone);
-        });
-
-        const rootStyle = getComputedStyle(document.documentElement);
-        const bodyStyle = document.body ? getComputedStyle(document.body) : null;
-        for (const [target, computed] of [[frameDocument.documentElement, rootStyle], [frameDocument.body, bodyStyle]]) {
-            if (!computed) continue;
-            for (let index = 0; index < computed.length; index += 1) {
-                const property = computed[index];
-                if (property.startsWith('--')) target.style.setProperty(property, computed.getPropertyValue(property));
-            }
-        }
-        frameDocument.documentElement.className = document.documentElement.className;
-        if (document.body) frameDocument.body.className = document.body.className;
-        return Promise.all(pending);
-    }
-
-    function freezeExportTypography(sourceNode, frameWindow) {
-        const nodes = [sourceNode, ...sourceNode.querySelectorAll('*')];
-        const fontLoads = new Map();
-        nodes.forEach((node) => {
-            if (!(node instanceof frameWindow.HTMLElement)) return;
-            const computed = frameWindow.getComputedStyle(node);
-            ['font-family', 'font-size', 'font-weight', 'font-style', 'line-height', 'letter-spacing', 'text-transform'].forEach((property) => {
-                const value = computed.getPropertyValue(property);
-                if (value) node.style.setProperty(property, value);
-            });
-            const family = computed.fontFamily;
-            const size = computed.fontSize;
-            const weight = computed.fontWeight;
-            if (family && size) {
-                const key = [family, size, weight].join('|');
-                if (!fontLoads.has(key)) fontLoads.set(key, { family, size, weight, sample: (node.textContent || '').trim().slice(0, 80) || '档案 Story' });
-            }
-        });
-        return Array.from(fontLoads.values());
-    }
-
-    async function waitForExportImages(root) {
-        const images = Array.from(root.querySelectorAll('img'));
-        await Promise.all(images.map(async (img) => {
-            if (!img.complete) {
-                await new Promise((resolve) => {
-                    let settled = false;
-                    const finish = () => { if (settled) return; settled = true; resolve(); };
-                    img.addEventListener('load', finish, { once: true });
-                    img.addEventListener('error', finish, { once: true });
-                    setTimeout(finish, 5000);
-                });
-            }
-            if (img.decode) await img.decode().catch(() => {});
-        }));
-    }
-
-    async function renderFloorImageBlob(entry, message, floorIndex, swipeIndex) {
-        const context = getContext();
-        const scope = getCurrentScope(context);
-        const sameChat = normalizeChatFile(getCurrentChatFile(context)) === normalizeChatFile(entry.fileName)
-            && scope.characterAvatar === entry.characterAvatar;
-        if (!sameChat) {
-            throw new Error('长截图只能拍摄当前已经打开的聊天。请先打开这条聊天记录，再导出对应楼层。');
-        }
-
-        const source = document.querySelector('#chat .mes[mesid="' + floorIndex + '"]');
-        if (!source) throw new Error('酒馆当前没有渲染这一楼。请先在聊天窗口中定位到该楼层，再重试。');
-
-        const swipeState = getFloorSwipeList(message);
-        if (swipeIndex !== swipeState.current) {
-            throw new Error('这一楼当前显示的是第 ' + (swipeState.current + 1) + ' 条回复。请先在酒馆切换到要导出的回复，再点击导出。');
-        }
-
-        const html2canvas = await loadHtml2Canvas();
-        if (document.fonts?.ready) await document.fonts.ready;
-        await waitForExportImages(source);
-        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-
-        const rect = source.getBoundingClientRect();
-        const width = Math.ceil(rect.width);
-        const height = Math.ceil(Math.max(source.scrollHeight, rect.height));
-        if (!width || !height) throw new Error('楼层尚未完成排版，无法截图。');
-        const pixelScale = Math.min(1.5, window.devicePixelRatio || 1, Math.sqrt(24000000 / (width * height)));
-        if (!Number.isFinite(pixelScale) || pixelScale <= 0) throw new Error('楼层图片尺寸超出设备可处理范围。');
-
-        const output = document.createElement('canvas');
-        output.width = Math.max(1, Math.ceil(width * pixelScale));
-        output.height = Math.max(1, Math.ceil(height * pixelScale));
-        const outputContext = output.getContext('2d');
-        if (!outputContext) throw new Error('无法创建长截图画布。');
-
-        const chunkHeight = 2600;
-        const captureBase = {
-            scale: pixelScale,
-            useCORS: true,
-            allowTaint: false,
-            logging: false,
-            width,
-            windowWidth: Math.max(document.documentElement.clientWidth, Math.ceil(rect.right)),
-            windowHeight: Math.max(document.documentElement.clientHeight, Math.ceil(rect.bottom)),
-            scrollX: -window.scrollX,
-            scrollY: -window.scrollY,
-            ignoreElements: (element) => element.matches?.(
-                '.mes_buttons, .mes_edit_buttons, .mes_timer, .mesIDDisplay, .parallel-story-floor-branch-wrap'
-            ) || Boolean(element.closest?.('.mes_buttons, .mes_edit_buttons')),
-        };
-
-        for (let top = 0; top < height; top += chunkHeight) {
-            const partHeight = Math.min(chunkHeight, height - top);
-            const options = Object.assign({}, captureBase, {
-                x: rect.left + window.scrollX,
-                y: rect.top + window.scrollY + top,
-                height: partHeight,
-            });
-            let part;
-            try {
-                part = await html2canvas(source, options);
-            } catch (error) {
-                if (!/Unsupported angle type/i.test(String(error?.message || error))) throw error;
-                console.warn('[档案] 截图遇到不受支持的渐变角度，正在使用兼容模式重试。', error);
-                options.onclone = (clonedDocument) => {
-                    const fallback = clonedDocument.createElement('style');
-                    fallback.textContent = '*{background-image:none!important;mask-image:none!important}*::before,*::after{background-image:none!important;mask-image:none!important}';
-                    clonedDocument.head.append(fallback);
-                    clonedDocument.querySelectorAll('[style]').forEach((element) => {
-                        element.style.setProperty('background-image', 'none', 'important');
-                        element.style.setProperty('mask-image', 'none', 'important');
-                    });
-                };
-                part = await html2canvas(source, options);
-            }
-            outputContext.drawImage(part, 0, 0, part.width, part.height, 0, Math.round(top * pixelScale), output.width, Math.round(partHeight * pixelScale));
-            part.width = 1;
-            part.height = 1;
-
-            // Yield to the browser between slices so SillyTavern remains interactive.
-            if (top + partHeight < height) {
-                await new Promise((resolve) => setTimeout(resolve, 32));
-            }
-        }
-
-        return await new Promise((resolve, reject) => {
-            output.toBlob((blob) => blob ? resolve(blob) : reject(new Error('长截图 PNG 生成失败')), 'image/png');
-        });
-    }
-
-    function downloadFloorImage(blob, entry, floorIndex, swipeIndex) {
-        const url = URL.createObjectURL(blob), anchor = document.createElement('a');
-        anchor.href = url;
-        anchor.download = '档案-' + normalizeChatFile(entry.fileName) + '-第' + (floorIndex + 1) + '楼-Swipe' + (swipeIndex + 1) + '.png';
-        document.body.append(anchor); anchor.click(); anchor.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 3000);
-    }
-
-    function showFloorExportPreview(blob, entry, floorIndex, swipeIndex) {
-        document.querySelector('.parallel-story-export-preview')?.remove();
-        const preview = document.createElement('section');
-        const url = URL.createObjectURL(blob);
-        preview.className = 'parallel-story-export-preview';
-        preview.innerHTML = '<div class="parallel-story-export-preview-dialog" role="dialog" aria-modal="true" aria-label="图片导出预览">' +
-            '<header><strong>导出预览</strong><button type="button" data-preview-action="close" aria-label="关闭">×</button></header>' +
-            '<div class="parallel-story-export-preview-canvas"><img alt="即将导出的 PNG 图片预览"></div>' +
-            '<footer><button type="button" data-preview-action="back">返回设置</button><button type="button" data-preview-action="confirm">确认导出 PNG</button></footer></div>';
-        preview.querySelector('img').src = url;
-        preview.addEventListener('click', (event) => {
-            if (event.target === preview || event.target.closest('[data-preview-action="close"]') || event.target.closest('[data-preview-action="back"]')) {
-                preview.remove(); URL.revokeObjectURL(url); return;
-            }
-            if (event.target.closest('[data-preview-action="confirm"]')) {
-                downloadFloorImage(blob, entry, floorIndex, swipeIndex);
-                preview.remove(); URL.revokeObjectURL(url);
-                showNotice('图片已导出。', 'success');
-            }
-        });
-        document.body.append(preview);
-    }
-
-    function showFloorExportSettings(root, floorIndex, swipeIndex, entryOverride = null, dataOverride = null) {
-        document.querySelector('.parallel-story-export-settings')?.remove();
-        const dialog = document.createElement('section');
-        dialog.className = 'parallel-story-export-settings';
-        dialog.innerHTML = '<div class="parallel-story-export-dialog" role="dialog" aria-modal="true" aria-label="楼层长截图">' +
-            '<header><strong>导出楼层长截图</strong><button type="button" data-export-action="close" aria-label="关闭">×</button></header>' +
-            '<div class="parallel-story-export-hint">将直接截取酒馆当前渲染的这一楼，保留当前主题、字体、气泡、图片与排版。超长楼层会自动分段拼接。请先在酒馆切换到要导出的 Swipe。</div>' +
-            '<div class="parallel-story-export-hint">目前仅支持当前已打开聊天中已经渲染的楼层，不会用档案的样式重新排版。</div>' +
-            '<footer><button type="button" data-export-action="preview">生成长截图预览</button></footer></div>';
-        dialog.addEventListener('click', async (event) => {
-            if (event.target === dialog || event.target.closest('[data-export-action="close"]')) return dialog.remove();
-            if (!event.target.closest('[data-export-action="preview"]')) return;
-            const sourceData = dataOverride || root._floorData;
-            const sourceEntry = entryOverride || root._floorEntry;
-            const message = sourceData && sourceData[floorIndex];
-            if (!message || !sourceEntry) return showNotice('找不到要导出的楼层。', 'error');
-            // Close the modal immediately; generation continues without blocking user interaction.
-            dialog.remove();
-            showNotice('正在后台生成楼层长截图，可以继续操作酒馆。完成后会自动打开预览。', 'info');
-            try {
-                const blob = await renderFloorImageBlob(sourceEntry, message, floorIndex, swipeIndex);
-                showFloorExportPreview(blob, sourceEntry, floorIndex, swipeIndex);
-            } catch (error) {
-                console.error('[档案] 楼层长截图失败：', error);
-                showNotice(error.message || '楼层长截图失败。', 'error');
-            }
-        });
-        document.body.append(dialog);
-    }
-
     function escapeHtml(value) {
         return String(value ?? '').replace(/[&<>"']/g, (char) => ({
             '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -1002,7 +737,7 @@
                 '<span class="parallel-story-floor-number">' + (index + 1) + '</span><span class="parallel-story-floor-content"><span class="parallel-story-floor-author">' + escapeHtml(who) + '</span>' +
                 '<span class="parallel-story-floor-preview">' + escapeHtml(preview) + '</span></span></button><div class="parallel-story-floor-tools">' + picker +
                 '<button type="button" class="parallel-story-floor-tool' + (favorite ? ' is-favorite' : '') + '" data-action="favorite-floor" data-index="' + index + '" data-swipe="' + selectedSwipe + '" title="' + (favorite ? '取消收藏' : '收藏这条备用回复') + '">' + (favorite ? '★' : '☆') + '</button>' +
-                '<button type="button" class="parallel-story-floor-tool" data-action="export-floor-image" data-index="' + index + '" data-swipe="' + selectedSwipe + '" title="导出图片">PNG</button></div></div>';
+                '</div></div>';
         }).join('');
         const pager = `
             <div class="parallel-story-floor-pager">
@@ -1011,7 +746,7 @@
                 <button data-action="floor-page" data-page="${root._floorPage + 1}" ${root._floorPage >= pageCount - 1 ? 'disabled' : ''}>下一页</button>
             </div>`;
         const favoriteCount = getStore().favorites.length;
-        const exportBar = '<div class="parallel-story-floor-actions"><button type="button" data-action="show-favorites">收藏夹 · ' + favoriteCount + '</button><button type="button" data-action="open-export-settings" data-index="' + Math.max(0, all.length - 1) + '" data-swipe="0">导出设置</button></div>';
+        const exportBar = '<div class="parallel-story-floor-actions"><button type="button" data-action="show-favorites">收藏夹 · ' + favoriteCount + '</button></div>';
         list.innerHTML = heading + exportBar + (rows || '<div class="parallel-story-empty">没有找到匹配的楼层</div>') + pager;
         const search = list.querySelector('.parallel-story-floor-search');
         search?.addEventListener('input', () => {
@@ -1049,7 +784,7 @@
         const rows = selected.map((item) =>
             '<article class="parallel-story-favorite-row"><div class="parallel-story-favorite-meta">' + escapeHtml(item.fileName) + ' · 第 ' + (item.floorIndex + 1) + ' 楼 · Swipe ' + (item.swipeIndex + 1) + '</div>' +
             '<div class="parallel-story-favorite-preview">' + escapeHtml(extractFloorContent(item.mes).replace(/\s+/g, ' ').slice(0, 180)) + '</div>' +
-            '<div class="parallel-story-favorite-actions"><button data-action="export-favorite-image" data-id="' + escapeHtml(item.id) + '">导出图片</button><button data-action="remove-favorite" data-id="' + escapeHtml(item.id) + '">取消收藏</button></div></article>'
+            '<div class="parallel-story-favorite-actions"><button data-action="remove-favorite" data-id="' + escapeHtml(item.id) + '">取消收藏</button></div></article>'
         ).join('');
         list.innerHTML = '<div class="parallel-story-floor-heading"><button class="parallel-story-back" data-action="back-favorites">‹ 返回收藏夹</button><div class="parallel-story-selected-character">' + escapeHtml(name) + ' · ' + selected.length + ' 条收藏</div></div>' +
             (rows || '<div class="parallel-story-empty">这个角色还没有收藏</div>');
@@ -1596,20 +1331,11 @@
 
         if (action === 'close') return closeManager();
         if (action === 'favorite-floor') { toggleFloorFavorite(document.getElementById(ROOT_ID), Number(button.dataset.index), Number(button.dataset.swipe)); return; }
-        if (action === 'export-floor-image' || action === 'open-export-settings') { const root = document.getElementById(ROOT_ID); if (root) showFloorExportSettings(root, Number(button.dataset.index), Number(button.dataset.swipe)); return; }
         if (action === 'show-favorites') { const root = document.getElementById(ROOT_ID); if (root) { root.dataset.favoritesReturn = root._floorEntry ? 'floor' : 'home'; delete root.dataset.favoriteCharacterAvatar; showFavoritesPage(root); } return; }
         if (action === 'favorite-character') { const root = document.getElementById(ROOT_ID); if (root) { root.dataset.favoriteCharacterAvatar = button.dataset.avatar || ''; showFavoritesPage(root, root.dataset.favoriteCharacterAvatar); } return; }
         if (action === 'back-favorites') { const root = document.getElementById(ROOT_ID); if (root) { delete root.dataset.favoriteCharacterAvatar; showFavoritesPage(root); } return; }
         if (action === 'back-favorites-floor') { const root = document.getElementById(ROOT_ID); if (root) { if (root.dataset.favoritesReturn === 'floor' && root._floorEntry) renderFloorPage(root); else { delete root.dataset.selectedCharacterId; renderCharacterCards(root, root._entries || []); } } return; }
         if (action === 'remove-favorite') { const store = getStore(); store.favorites = store.favorites.filter((item) => item.id !== id); saveStore(); const root = document.getElementById(ROOT_ID); if (root) showFavoritesPage(root, root.dataset.favoriteCharacterAvatar || null); return; }
-        if (action === 'export-favorite-image') {
-            const item = getStore().favorites.find((favorite) => favorite.id === id);
-            if (!item) return showNotice('找不到这条收藏。', 'warning');
-            const entry = { characterName: item.characterName, characterAvatar: item.characterAvatar, characterId: item.characterId, characterAvatar: item.characterAvatar, fileName: item.fileName };
-            try { await exportFloorImage(entry, { mes: item.mes, name: item.author, is_user: item.isUser }, item.floorIndex, item.swipeIndex); showNotice('收藏图片已导出。', 'success'); }
-            catch (error) { showNotice(error.message || '图片导出失败。', 'error'); }
-            return;
-        }
         if (action === 'create') return createCurrentBranch();
 
         if (action === 'import-chat') {
@@ -1828,13 +1554,13 @@
             wrap.className = 'parallel-story-floor-branch-wrap';
             const button = document.createElement('div');
             button.className = 'mes_button parallel-story-floor-branch fa-solid fa-code-branch';
-            button.title = '楼层操作：创建分支、收藏或导出';
+            button.title = '楼层操作：创建分支或收藏';
             button.setAttribute('role', 'button');
             button.setAttribute('tabindex', '0');
             button.setAttribute('aria-label', '楼层操作菜单');
             const menu = document.createElement('div');
             menu.className = 'parallel-story-message-action-menu';
-            menu.innerHTML = '<button type="button" data-floor-menu-action="branch">创建分支</button><button type="button" data-floor-menu-action="favorite">收藏这一楼</button><button type="button" data-floor-menu-action="export">导出这一楼</button>';
+            menu.innerHTML = '<button type="button" data-floor-menu-action="branch">创建分支</button><button type="button" data-floor-menu-action="favorite">收藏这一楼</button>';
             let outsidePointerHandler = null;
             const closeMenu = () => {
                 menu.classList.remove('is-open');
@@ -1885,10 +1611,6 @@
                     const pseudoRoot = { _floorEntry: entry, _floorData: context.chat, querySelector: () => null };
                     toggleFloorFavorite(pseudoRoot, index, swipe);
                     return;
-                }
-                if (action === 'export') {
-                    const host = document.getElementById(ROOT_ID) || document.body;
-                    showFloorExportSettings(host, index, swipe, entry, context.chat);
                 }
             });
             wrap.append(button);
