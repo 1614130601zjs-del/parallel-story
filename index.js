@@ -293,7 +293,7 @@
             iframe.style.height = measuredHeight + 'px';
             await new Promise((resolve) => requestAnimationFrame(resolve));
 
-            const canvas = await html2canvas(stage, {
+            const captureOptions = {
                 backgroundColor: settings.theme === 'card' ? settings.background : null,
                 scale: Math.min(2, window.devicePixelRatio || 1),
                 useCORS: true,
@@ -305,7 +305,28 @@
                 windowHeight: measuredHeight,
                 scrollX: 0,
                 scrollY: 0,
-            });
+            };
+            let canvas;
+            try {
+                canvas = await html2canvas(stage, captureOptions);
+            } catch (error) {
+                // html2canvas 1.4.1 会在解析部分主题渐变角度时抛出
+                // Unsupported angle type。仅在该错误出现时降级移除 CSS 背景图，
+                // 保留背景色、正文、真实图片和布局后重新截图。
+                if (!/Unsupported angle type/i.test(String(error && error.message || error))) throw error;
+                console.warn('[档案] 检测到截图组件不支持主题渐变角度，正在使用兼容样式重试。', error);
+                const retryOptions = Object.assign({}, captureOptions, {
+                    onclone: (clonedDocument) => {
+                        const fallbackStyle = clonedDocument.createElement('style');
+                        fallbackStyle.textContent = '*{background-image:none!important}*::before,*::after{background-image:none!important}';
+                        clonedDocument.head.append(fallbackStyle);
+                        clonedDocument.querySelectorAll('[style]').forEach((element) => {
+                            element.style.setProperty('background-image', 'none', 'important');
+                        });
+                    },
+                });
+                canvas = await html2canvas(stage, retryOptions);
+            }
             return await new Promise((resolve, reject) =>
                 canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('图片生成失败')), 'image/png')
             );
