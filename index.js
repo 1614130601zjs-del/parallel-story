@@ -197,8 +197,8 @@
             document.body.append(anchor); anchor.click(); anchor.remove(); setTimeout(() => URL.revokeObjectURL(url), 1500);
         } finally { stage.remove(); }
     }
-    function showFloorExportSettings(root, floorIndex, swipeIndex) {
-        root.querySelector('.parallel-story-export-settings')?.remove();
+    function showFloorExportSettings(root, floorIndex, swipeIndex, entryOverride = null, dataOverride = null) {
+        document.querySelector('.parallel-story-export-settings')?.remove();
         const settings = getExportSettings(), dialog = document.createElement('section');
         dialog.className = 'parallel-story-export-settings';
         dialog.innerHTML = '<div class="parallel-story-export-dialog" role="dialog" aria-modal="true" aria-label="图片导出设置">' +
@@ -224,14 +224,16 @@
             });
             getStore().exportSettings = next; saveStore();
             if (action === 'save') return showNotice('导出样式已保存。', 'success');
-            const message = root._floorData && root._floorData[floorIndex];
-            if (!message) return showNotice('找不到要导出的楼层。', 'error');
+            const sourceData = dataOverride || root._floorData;
+            const sourceEntry = entryOverride || root._floorEntry;
+            const message = sourceData && sourceData[floorIndex];
+            if (!message || !sourceEntry) return showNotice('找不到要导出的楼层。', 'error');
             const button = dialog.querySelector('[data-export-action="download"]'); button.disabled = true; button.textContent = '正在生成…';
-            try { await exportFloorImage(root._floorEntry, message, floorIndex, swipeIndex, next); showNotice('图片已导出。', 'success'); }
+            try { await exportFloorImage(sourceEntry, message, floorIndex, swipeIndex, next); showNotice('图片已导出。', 'success'); }
             catch (error) { console.error('[档案] 图片导出失败：', error); showNotice(error.message || '图片导出失败。', 'error'); }
             finally { button.disabled = false; button.textContent = '导出 PNG'; }
         });
-        root.append(dialog);
+        document.body.append(dialog);
     }
 
     function escapeHtml(value) {
@@ -896,11 +898,34 @@
         });
     }
 
-    function showFavoritesPage(root) {
+    function showFavoritesPage(root, characterAvatar = null) {
         const list = root.querySelector('.parallel-story-list'); if (!list) return;
-        const favorites = [...getStore().favorites].sort((a,b) => b.createdAt - a.createdAt);
-        const rows = favorites.map((item) => '<article class="parallel-story-favorite-row"><div class="parallel-story-favorite-meta">' + escapeHtml(item.characterName) + ' · ' + escapeHtml(item.fileName) + ' · 第 ' + (item.floorIndex + 1) + ' 楼 · Swipe ' + (item.swipeIndex + 1) + '</div><div class="parallel-story-favorite-preview">' + escapeHtml(extractFloorContent(item.mes).replace(/\s+/g, ' ').slice(0,180)) + '</div><div class="parallel-story-favorite-actions"><button data-action="export-favorite-image" data-id="' + escapeHtml(item.id) + '">导出图片</button><button data-action="remove-favorite" data-id="' + escapeHtml(item.id) + '">取消收藏</button></div></article>').join('');
-        list.innerHTML = '<div class="parallel-story-floor-heading"><button class="parallel-story-back" data-action="back-favorites-floor">‹ 返回楼层</button><div class="parallel-story-selected-character">收藏夹 · ' + favorites.length + ' 条</div></div>' + (rows || '<div class="parallel-story-empty">还没有收藏的楼层回复</div>');
+        const favorites = [...getStore().favorites].sort((a, b) => b.createdAt - a.createdAt);
+        if (!characterAvatar) {
+            const groups = new Map();
+            favorites.forEach((item) => {
+                const key = String(item.characterAvatar || item.characterName || 'unknown');
+                if (!groups.has(key)) groups.set(key, { avatar: item.characterAvatar || '', name: item.characterName || '未知角色', items: [] });
+                groups.get(key).items.push(item);
+            });
+            const cards = [...groups.values()].map((group) =>
+                '<button class="parallel-story-favorite-character" data-action="favorite-character" data-avatar="' + escapeHtml(group.avatar) + '">' +
+                '<img src="/characters/' + encodeURIComponent(group.avatar) + '" alt="">' +
+                '<span><strong>' + escapeHtml(group.name) + '</strong><small>' + group.items.length + ' 条收藏</small></span><b>›</b></button>'
+            ).join('');
+            list.innerHTML = '<div class="parallel-story-floor-heading"><button class="parallel-story-back" data-action="back-favorites-floor">‹ 返回楼层</button><div class="parallel-story-selected-character">收藏夹 · ' + favorites.length + ' 条</div></div>' +
+                (cards ? '<div class="parallel-story-favorite-character-list">' + cards + '</div>' : '<div class="parallel-story-empty">还没有收藏的楼层回复</div>');
+            return;
+        }
+        const selected = favorites.filter((item) => String(item.characterAvatar || '') === String(characterAvatar));
+        const name = selected[0]?.characterName || '角色收藏';
+        const rows = selected.map((item) =>
+            '<article class="parallel-story-favorite-row"><div class="parallel-story-favorite-meta">' + escapeHtml(item.fileName) + ' · 第 ' + (item.floorIndex + 1) + ' 楼 · Swipe ' + (item.swipeIndex + 1) + '</div>' +
+            '<div class="parallel-story-favorite-preview">' + escapeHtml(extractFloorContent(item.mes).replace(/\\s+/g, ' ').slice(0, 180)) + '</div>' +
+            '<div class="parallel-story-favorite-actions"><button data-action="export-favorite-image" data-id="' + escapeHtml(item.id) + '">导出图片</button><button data-action="remove-favorite" data-id="' + escapeHtml(item.id) + '">取消收藏</button></div></article>'
+        ).join('');
+        list.innerHTML = '<div class="parallel-story-floor-heading"><button class="parallel-story-back" data-action="back-favorites">‹ 返回收藏夹</button><div class="parallel-story-selected-character">' + escapeHtml(name) + ' · ' + selected.length + ' 条收藏</div></div>' +
+            (rows || '<div class="parallel-story-empty">这个角色还没有收藏</div>');
     }
     async function showFloorPicker(root, entry) {
         const list = root.querySelector('.parallel-story-list');
@@ -1445,9 +1470,11 @@
         if (action === 'close') return closeManager();
         if (action === 'favorite-floor') { toggleFloorFavorite(document.getElementById(ROOT_ID), Number(button.dataset.index), Number(button.dataset.swipe)); return; }
         if (action === 'export-floor-image' || action === 'open-export-settings') { const root = document.getElementById(ROOT_ID); if (root) showFloorExportSettings(root, Number(button.dataset.index), Number(button.dataset.swipe)); return; }
-        if (action === 'show-favorites') { const root = document.getElementById(ROOT_ID); if (root) showFavoritesPage(root); return; }
+        if (action === 'show-favorites') { const root = document.getElementById(ROOT_ID); if (root) { delete root.dataset.favoriteCharacterAvatar; showFavoritesPage(root); } return; }
+        if (action === 'favorite-character') { const root = document.getElementById(ROOT_ID); if (root) { root.dataset.favoriteCharacterAvatar = button.dataset.avatar || ''; showFavoritesPage(root, root.dataset.favoriteCharacterAvatar); } return; }
+        if (action === 'back-favorites') { const root = document.getElementById(ROOT_ID); if (root) { delete root.dataset.favoriteCharacterAvatar; showFavoritesPage(root); } return; }
         if (action === 'back-favorites-floor') { const root = document.getElementById(ROOT_ID); if (root) renderFloorPage(root); return; }
-        if (action === 'remove-favorite') { const store = getStore(); store.favorites = store.favorites.filter((item) => item.id !== id); saveStore(); const root = document.getElementById(ROOT_ID); if (root) showFavoritesPage(root); return; }
+        if (action === 'remove-favorite') { const store = getStore(); store.favorites = store.favorites.filter((item) => item.id !== id); saveStore(); const root = document.getElementById(ROOT_ID); if (root) showFavoritesPage(root, root.dataset.favoriteCharacterAvatar || null); return; }
         if (action === 'export-favorite-image') {
             const item = getStore().favorites.find((favorite) => favorite.id === id);
             if (!item) return showNotice('找不到这条收藏。', 'warning');
@@ -1668,23 +1695,52 @@
         const messages = chatRoot.querySelectorAll('.mes[mesid]:not([is_system="true"])');
         for (const message of messages) {
             const toolbar = message.querySelector('.mes_buttons');
-            if (!toolbar || toolbar.querySelector('.parallel-story-floor-branch')) continue;
+            if (!toolbar || toolbar.querySelector('.parallel-story-floor-branch-wrap')) continue;
+            const index = Number(message.getAttribute('mesid'));
+            const wrap = document.createElement('div');
+            wrap.className = 'parallel-story-floor-branch-wrap';
             const button = document.createElement('div');
             button.className = 'mes_button parallel-story-floor-branch fa-solid fa-code-branch';
-            button.title = '从这一楼创建剧情分支';
+            button.title = '楼层操作：创建分支、收藏或导出';
             button.setAttribute('role', 'button');
             button.setAttribute('tabindex', '0');
-            button.setAttribute('aria-label', '从这一楼创建剧情分支');
-            const activate = (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                createBranchFromMessage(Number(message.getAttribute('mesid')));
+            button.setAttribute('aria-label', '楼层操作菜单');
+            const menu = document.createElement('div');
+            menu.className = 'parallel-story-message-action-menu';
+            menu.innerHTML = '<button type="button" data-floor-menu-action="branch">创建分支</button><button type="button" data-floor-menu-action="favorite">收藏这一楼</button><button type="button" data-floor-menu-action="export">导出这一楼</button>';
+            const closeMenu = () => menu.classList.remove('is-open');
+            const toggleMenu = (event) => {
+                event.preventDefault(); event.stopPropagation();
+                document.querySelectorAll('.parallel-story-message-action-menu.is-open').forEach((item) => { if (item !== menu) item.classList.remove('is-open'); });
+                menu.classList.toggle('is-open');
             };
-            button.addEventListener('click', activate);
-            button.addEventListener('keydown', (event) => {
-                if (event.key === 'Enter' || event.key === ' ') activate(event);
+            button.addEventListener('click', toggleMenu);
+            button.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') toggleMenu(event); });
+            menu.addEventListener('click', (event) => {
+                const actionButton = event.target.closest('[data-floor-menu-action]');
+                if (!actionButton) return;
+                event.preventDefault(); event.stopPropagation();
+                const action = actionButton.dataset.floorMenuAction;
+                closeMenu();
+                if (action === 'branch') { createBranchFromMessage(index); return; }
+                const context = getContext();
+                const messageData = context?.chat?.[index];
+                if (!messageData) return showNotice('找不到这一楼的消息。', 'warning');
+                const scope = getCurrentScope(context);
+                const entry = { characterName: scope.characterName, characterAvatar: scope.characterAvatar, characterId: scope.characterId, fileName: scope.chatFile };
+                const swipe = getFloorSwipeList(messageData).current;
+                if (action === 'favorite') {
+                    const pseudoRoot = { _floorEntry: entry, _floorData: context.chat, querySelector: () => null };
+                    toggleFloorFavorite(pseudoRoot, index, swipe);
+                    return;
+                }
+                if (action === 'export') {
+                    const host = document.getElementById(ROOT_ID) || document.body;
+                    showFloorExportSettings(host, index, swipe, entry, context.chat);
+                }
             });
-            toolbar.append(button);
+            wrap.append(button, menu);
+            toolbar.append(wrap);
         }
         return true;
     }
