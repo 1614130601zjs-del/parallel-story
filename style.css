@@ -1202,3 +1202,119 @@
 .parallel-story-export-css-label span,.parallel-story-export-hint{font-size:10px;font-weight:400;color:var(--SmartThemeQuoteColor,#888)}
 .parallel-story-export-css{box-sizing:border-box;width:100%;min-height:180px;resize:vertical;padding:10px;border:1px solid var(--SmartThemeBorderColor,rgba(100,100,100,.22));border-radius:6px;background:rgba(0,0,0,.06);color:inherit;font:11px/1.55 ui-monospace,monospace}
 @media(max-width:520px){.parallel-story-floor-tools{gap:3px}.parallel-story-floor-tools button{padding:5px}.parallel-story-floor-swipe{max-width:68px;min-width:56px}.parallel-story-export-options{grid-template-columns:1fr}}
+
+
+/* Export dialog is viewport-centered, independent from the manager panel. */
+.parallel-story-export-settings {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 100000 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    box-sizing: border-box !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    max-width: none !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 16px !important;
+    border-radius: 0 !important;
+    background: rgba(0, 0, 0, .58) !important;
+}
+.parallel-story-export-dialog {
+    box-sizing: border-box !important;
+    width: min(620px, 100%) !important;
+    max-width: 100% !important;
+    max-height: min(88vh, 88dvh) !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    margin: auto !important;
+}
+@media (max-width: 600px) {
+    .parallel-story-export-settings { padding: 10px !important; }
+    .parallel-story-export-dialog { width: 100% !important; max-height: 90vh !important; max-height: 90dvh !important; padding: 13px !important; }
+    .parallel-story-export-options { grid-template-columns: 1fr !important; }
+    .parallel-story-export-css { min-height: 130px !important; }
+}
+
+/* One character-card landing page for the complete favorites collection. */
+.parallel-story-favorite-character-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 0;
+}
+.parallel-story-favorite-character {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 66px;
+    padding: 9px 12px;
+    border: 1px solid #dedede;
+    border-radius: 3px;
+    color: #171717;
+    background: #fff;
+    text-align: left;
+    cursor: pointer;
+}
+.parallel-story-favorite-character:hover { background: #f6f6f6; }
+.parallel-story-favorite-character img {
+    flex: 0 0 44px;
+    width: 44px;
+    height: 44px;
+    object-fit: cover;
+    border-radius: 2px;
+    background: #eee;
+}
+.parallel-story-favorite-character > span {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+    gap: 4px;
+}
+.parallel-story-favorite-character strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.parallel-story-favorite-character small { color: #777; font-size: 11px; }
+.parallel-story-favorite-character > b { color: #777; font-size: 20px; font-weight: 400; }
+
+/* Message-toolbar dropdown for branch, favorite and image export actions. */
+.parallel-story-floor-branch-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+.parallel-story-floor-branch-wrap .parallel-story-floor-branch { cursor: pointer; }
+.parallel-story-message-action-menu {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 5px);
+    z-index: 10050;
+    display: none;
+    flex-direction: column;
+    min-width: 132px;
+    padding: 4px;
+    border: 1px solid rgba(120, 120, 120, .35);
+    border-radius: 4px;
+    background: var(--SmartThemeBlurTintColor, #fff);
+    color: var(--SmartThemeBodyColor, #222);
+    box-shadow: 0 5px 18px rgba(0, 0, 0, .22);
+}
+.parallel-story-message-action-menu.is-open { display: flex; }
+.parallel-story-message-action-menu button {
+    width: 100%;
+    padding: 8px 10px;
+    border: 0;
+    border-radius: 2px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: 12px;
+    text-align: left;
+    white-space: nowrap;
+    cursor: pointer;
+}
+.parallel-story-message-action-menu button:hover { background: rgba(128, 128, 128, .14); }
