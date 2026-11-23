@@ -125,6 +125,7 @@
         const author = message.name || (message.is_user ? '用户' : entry.characterName || '角色');
         const stage = document.createElement('div');
         stage.className = 'ps-export-stage ps-export-theme-' + settings.theme;
+        if (settings.theme === 'native') stage.id = 'chat';
         stage.style.cssText = 'position:fixed;left:-12000px;top:0;width:' + Math.max(360, Math.min(1600, Number(settings.width) || 860)) + 'px;padding:' + Math.max(0, Math.min(120, Number(settings.padding) || 32)) + 'px;background:' + (settings.background || '#f4f4f4') + ';z-index:-1;box-sizing:border-box;';
         const style = document.createElement('style');
         style.textContent = '.ps-export-stage{font-family:var(--mainFont,Arial,sans-serif);color:var(--SmartThemeBodyColor,#252525);overflow:visible}' +
@@ -140,7 +141,11 @@
             node.querySelectorAll('.mes_buttons,.mes_edit_buttons,.mes_timer,.mesIDDisplay').forEach((el) => el.remove());
             const body = node.querySelector('.mes_text');
             if (body && swipeIndex !== getFloorSwipeList(message).current) body.innerHTML = content;
-            node.removeAttribute('style'); node.style.cssText = 'display:block!important;position:relative!important;width:100%!important;max-width:100%!important;margin:0!important;';
+            node.style.setProperty('display', 'block', 'important');
+            node.style.setProperty('position', 'relative', 'important');
+            node.style.setProperty('width', '100%', 'important');
+            node.style.setProperty('max-width', '100%', 'important');
+            node.style.setProperty('margin', '0', 'important');
         } else {
             node = document.createElement('article'); node.className = 'ps-export-card';
             node.innerHTML = '<header class="ps-export-card-head">' + (settings.showAuthor ? '<strong>' + escapeHtml(author) + '</strong>' : '') +
