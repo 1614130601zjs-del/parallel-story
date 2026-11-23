@@ -56,14 +56,146 @@
 
     function getStore() {
         window.extension_settings ??= {};
-        window.extension_settings[EXTENSION_KEY] ??= { branches: [] };
+        window.extension_settings[EXTENSION_KEY] ??= { branches: [], favorites: [], exportSettings: {} };
         const store = window.extension_settings[EXTENSION_KEY];
         if (!Array.isArray(store.branches)) store.branches = [];
+        if (!Array.isArray(store.favorites)) store.favorites = [];
+        if (!store.exportSettings || typeof store.exportSettings !== 'object') store.exportSettings = {};
         return store;
     }
 
     function saveStore() {
         window.saveSettingsDebounced?.();
+    }
+
+
+    function getExportSettings() {
+        return Object.assign({ theme: 'native', width: 860, padding: 32, background: '#f4f4f4', customCss: '', showAuthor: true, showFloor: true }, getStore().exportSettings);
+    }
+    function getFloorSwipeList(message) {
+        const swipes = Array.isArray(message && message.swipes) && message.swipes.length ? message.swipes : [message && message.mes || ''];
+        const current = Number.isInteger(Number(message && message.swipe_id)) ? Number(message.swipe_id) : 0;
+        return { swipes, current: Math.min(Math.max(0, current), swipes.length - 1) };
+    }
+    function getFloorFavoriteKey(entry, floorIndex, swipeIndex) {
+        return [entry.characterAvatar, normalizeChatFile(entry.fileName), floorIndex, swipeIndex].join('::');
+    }
+    function isFloorFavorite(entry, floorIndex, swipeIndex) {
+        const key = getFloorFavoriteKey(entry, floorIndex, swipeIndex);
+        return getStore().favorites.some((item) => item.key === key);
+    }
+    function toggleFloorFavorite(root, floorIndex, swipeIndex) {
+        const entry = root && root._floorEntry, message = root && root._floorData && root._floorData[floorIndex];
+        if (!entry || !message) return;
+        const store = getStore(), key = getFloorFavoriteKey(entry, floorIndex, swipeIndex);
+        const existing = store.favorites.findIndex((item) => item.key === key);
+        if (existing >= 0) {
+            store.favorites.splice(existing, 1);
+            showNotice('已取消收藏这条备用回复。', 'info');
+        } else {
+            const swipes = getFloorSwipeList(message).swipes;
+            store.favorites.push({ id: makeId(), key, characterName: entry.characterName, characterAvatar: entry.characterAvatar,
+                characterId: entry.characterId, fileName: normalizeChatFile(entry.fileName), floorIndex, swipeIndex,
+                swipeCount: swipes.length, isUser: Boolean(message.is_user), author: message.name || (message.is_user ? '用户' : entry.characterName),
+                mes: String(swipes[swipeIndex] == null ? message.mes || '' : swipes[swipeIndex]), createdAt: Date.now() });
+            showNotice('已收藏这条备用回复。', 'success');
+        }
+        saveStore(); renderFloorPage(root);
+    }
+    function loadHtml2Canvas() {
+        if (typeof window.html2canvas === 'function') return Promise.resolve(window.html2canvas);
+        if (window.__parallelStoryHtml2CanvasPromise) return window.__parallelStoryHtml2CanvasPromise;
+        window.__parallelStoryHtml2CanvasPromise = new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+            script.async = true;
+            script.onload = () => typeof window.html2canvas === 'function' ? resolve(window.html2canvas) : reject(new Error('截图组件加载失败'));
+            script.onerror = () => reject(new Error('无法加载图片导出组件，请检查网络连接后重试'));
+            document.head.append(script);
+        }).catch((error) => { window.__parallelStoryHtml2CanvasPromise = null; throw error; });
+        return window.__parallelStoryHtml2CanvasPromise;
+    }
+    async function exportFloorImage(entry, message, floorIndex, swipeIndex, overrides) {
+        const settings = Object.assign(getExportSettings(), overrides || {}), html2canvas = await loadHtml2Canvas();
+        const context = getContext(), scope = getCurrentScope(context);
+        const sameChat = normalizeChatFile(getCurrentChatFile(context)) === normalizeChatFile(entry.fileName) && scope.characterAvatar === entry.characterAvatar;
+        const source = sameChat ? document.querySelector('#chat .mes[mesid="' + floorIndex + '"]') : null;
+        const swipes = getFloorSwipeList(message).swipes;
+        const content = String(swipes[swipeIndex] == null ? message.mes || '' : swipes[swipeIndex]);
+        const author = message.name || (message.is_user ? '用户' : entry.characterName || '角色');
+        const stage = document.createElement('div');
+        stage.className = 'ps-export-stage ps-export-theme-' + settings.theme;
+        stage.style.cssText = 'position:fixed;left:-12000px;top:0;width:' + Math.max(360, Math.min(1600, Number(settings.width) || 860)) + 'px;padding:' + Math.max(0, Math.min(120, Number(settings.padding) || 32)) + 'px;background:' + (settings.background || '#f4f4f4') + ';z-index:-1;box-sizing:border-box;';
+        const style = document.createElement('style');
+        style.textContent = '.ps-export-stage{font-family:var(--mainFont,Arial,sans-serif);color:var(--SmartThemeBodyColor,#252525);overflow:visible}' +
+            '.ps-export-stage .ps-export-card{background:#fff;color:#252525;border-radius:14px;padding:24px;box-shadow:0 8px 28px #00000012;overflow-wrap:anywhere}' +
+            '.ps-export-stage .ps-export-card-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:18px;font-size:13px;color:#666}' +
+            '.ps-export-stage .ps-export-content{font-size:16px;line-height:1.75;letter-spacing:.01em}' +
+            '.ps-export-stage img{max-width:100%;height:auto}.ps-export-stage .mes{max-width:100%!important;width:100%!important}' +
+            '.ps-export-theme-card .mes{background:#fff!important;color:#252525!important;border-radius:14px!important;padding:24px!important;box-shadow:0 8px 28px #00000012}' + String(settings.customCss || '');
+        stage.append(style);
+        let node;
+        if (settings.theme === 'native' && source) {
+            node = source.cloneNode(true);
+            node.querySelectorAll('.mes_buttons,.mes_edit_buttons,.mes_timer,.mesIDDisplay').forEach((el) => el.remove());
+            const body = node.querySelector('.mes_text'); if (body) body.innerHTML = content;
+            node.removeAttribute('style'); node.style.cssText = 'display:block!important;position:relative!important;width:100%!important;max-width:100%!important;margin:0!important;';
+        } else {
+            node = document.createElement('article'); node.className = 'ps-export-card';
+            node.innerHTML = '<header class="ps-export-card-head">' + (settings.showAuthor ? '<strong>' + escapeHtml(author) + '</strong>' : '') +
+                (settings.showFloor ? '<span>第 ' + (floorIndex + 1) + ' 楼 · Swipe ' + (swipeIndex + 1) + '</span>' : '') +
+                '</header><div class="ps-export-content">' + content + '</div>';
+        }
+        stage.append(node); document.body.append(stage);
+        try {
+            if (document.fonts && document.fonts.ready) await document.fonts.ready;
+            await Promise.all(Array.from(stage.querySelectorAll('img')).map((img) => img.complete ? Promise.resolve() : new Promise((resolve) => {
+                img.onload = resolve; img.onerror = resolve; setTimeout(resolve, 3500);
+            })));
+            const canvas = await html2canvas(stage, { backgroundColor: settings.theme === 'card' ? settings.background : null,
+                scale: Math.min(2, window.devicePixelRatio || 1), useCORS: true, allowTaint: false, logging: false,
+                width: stage.scrollWidth, height: stage.scrollHeight, windowWidth: Math.max(document.documentElement.clientWidth, stage.scrollWidth) });
+            const blob = await new Promise((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error('图片生成失败')), 'image/png'));
+            const url = URL.createObjectURL(blob), anchor = document.createElement('a');
+            anchor.href = url; anchor.download = '档案-' + normalizeChatFile(entry.fileName) + '-第' + (floorIndex + 1) + '楼-Swipe' + (swipeIndex + 1) + '.png';
+            document.body.append(anchor); anchor.click(); anchor.remove(); setTimeout(() => URL.revokeObjectURL(url), 1500);
+        } finally { stage.remove(); }
+    }
+    function showFloorExportSettings(root, floorIndex, swipeIndex) {
+        root.querySelector('.parallel-story-export-settings')?.remove();
+        const settings = getExportSettings(), dialog = document.createElement('section');
+        dialog.className = 'parallel-story-export-settings';
+        dialog.innerHTML = '<div class="parallel-story-export-dialog" role="dialog" aria-modal="true" aria-label="图片导出设置">' +
+            '<header><strong>图片导出</strong><button type="button" data-export-action="close">×</button></header>' +
+            '<div class="parallel-story-export-options"><label>导出样式<select data-export-setting="theme"><option value="native"' + (settings.theme === 'native' ? ' selected' : '') + '>原生复刻</option><option value="card"' + (settings.theme === 'card' ? ' selected' : '') + '>精致卡片</option></select></label>' +
+            '<label>图片宽度（px）<input data-export-setting="width" type="number" min="360" max="1600" value="' + Number(settings.width) + '"></label>' +
+            '<label>四周留白（px）<input data-export-setting="padding" type="number" min="0" max="120" value="' + Number(settings.padding) + '"></label>' +
+            '<label>背景颜色<input data-export-setting="background" type="text" value="' + escapeHtml(settings.background) + '"></label>' +
+            '<label class="ps-export-check"><input data-export-setting="showAuthor" type="checkbox"' + (settings.showAuthor ? ' checked' : '') + '>显示作者信息</label>' +
+            '<label class="ps-export-check"><input data-export-setting="showFloor" type="checkbox"' + (settings.showFloor ? ' checked' : '') + '>显示楼层编号</label></div>' +
+            '<label class="parallel-story-export-css-label">自定义 CSS <span>仅影响导出图片</span></label>' +
+            '<textarea class="parallel-story-export-css" data-export-setting="customCss" spellcheck="false" placeholder=".ps-export-content { font-family: serif; letter-spacing: .04em; line-height: 2; }">' + escapeHtml(settings.customCss) + '</textarea>' +
+            '<div class="parallel-story-export-hint">可使用 .ps-export-stage、.ps-export-card、.ps-export-content、.mes、.mes_text 等选择器。</div>' +
+            '<footer><button type="button" data-export-action="save">保存样式</button><button type="button" data-export-action="download">导出 PNG</button></footer></div>';
+        dialog.addEventListener('click', async (event) => {
+            if (event.target === dialog || event.target.closest('[data-export-action="close"]')) return dialog.remove();
+            const action = event.target.closest('[data-export-action]')?.dataset.exportAction;
+            if (action !== 'save' && action !== 'download') return;
+            const next = Object.assign({}, getExportSettings());
+            dialog.querySelectorAll('[data-export-setting]').forEach((input) => {
+                const key = input.dataset.exportSetting;
+                next[key] = input.type === 'checkbox' ? input.checked : input.type === 'number' ? Number(input.value) : input.value;
+            });
+            getStore().exportSettings = next; saveStore();
+            if (action === 'save') return showNotice('导出样式已保存。', 'success');
+            const message = root._floorData && root._floorData[floorIndex];
+            if (!message) return showNotice('找不到要导出的楼层。', 'error');
+            const button = dialog.querySelector('[data-export-action="download"]'); button.disabled = true; button.textContent = '正在生成…';
+            try { await exportFloorImage(root._floorEntry, message, floorIndex, swipeIndex, next); showNotice('图片已导出。', 'success'); }
+            catch (error) { console.error('[档案] 图片导出失败：', error); showNotice(error.message || '图片导出失败。', 'error'); }
+            finally { button.disabled = false; button.textContent = '导出 PNG'; }
+        });
+        root.append(dialog);
     }
 
     function escapeHtml(value) {
@@ -695,17 +827,17 @@
         const rows = page.map((message) => {
             const index = all.indexOf(message);
             const who = message?.is_system ? '系统' : message?.is_user ? '用户' : (message?.name || entry.characterName || '角色');
-            const content = extractFloorContent(message?.mes).replace(/\s+/g, ' ').trim();
+            const swipeData = getFloorSwipeList(message);
+            const selectedSwipe = root._floorSwipeSelections?.[index] ?? swipeData.current;
+            const content = extractFloorContent(swipeData.swipes[selectedSwipe] ?? message?.mes).replace(/\s+/g, ' ').trim();
             const preview = content ? (content.length > 180 ? content.slice(0, 180) + '…' : content) : (message?.is_system ? '系统消息' : '（此楼没有可预览的文字）');
-            return `
-                <button class="parallel-story-floor-row" data-action="jump-floor" data-index="${index}">
-                    <span class="parallel-story-floor-number">${index + 1}</span>
-                    <span class="parallel-story-floor-content">
-                        <span class="parallel-story-floor-author">${escapeHtml(who)}</span>
-                        <span class="parallel-story-floor-preview">${escapeHtml(preview)}</span>
-                    </span>
-                    <span class="parallel-story-floor-arrow">›</span>
-                </button>`;
+            const favorite = isFloorFavorite(entry, index, selectedSwipe);
+            const picker = swipeData.swipes.length > 1 ? '<select class="parallel-story-floor-swipe" data-floor-swipe="' + index + '" aria-label="选择备用回复">' + swipeData.swipes.map((_, swipeIndex) => '<option value="' + swipeIndex + '"' + (swipeIndex === selectedSwipe ? ' selected' : '') + '>备用 ' + (swipeIndex + 1) + '</option>').join('') + '</select>' : '';
+            return '<div class="parallel-story-floor-row"><button class="parallel-story-floor-main" data-action="jump-floor" data-index="' + index + '">' +
+                '<span class="parallel-story-floor-number">' + (index + 1) + '</span><span class="parallel-story-floor-content"><span class="parallel-story-floor-author">' + escapeHtml(who) + '</span>' +
+                '<span class="parallel-story-floor-preview">' + escapeHtml(preview) + '</span></span></button><div class="parallel-story-floor-tools">' + picker +
+                '<button type="button" class="parallel-story-floor-tool' + (favorite ? ' is-favorite' : '') + '" data-action="favorite-floor" data-index="' + index + '" data-swipe="' + selectedSwipe + '" title="' + (favorite ? '取消收藏' : '收藏这条备用回复') + '">' + (favorite ? '★' : '☆') + '</button>' +
+                '<button type="button" class="parallel-story-floor-tool" data-action="export-floor-image" data-index="' + index + '" data-swipe="' + selectedSwipe + '" title="导出图片">PNG</button></div></div>';
         }).join('');
         const pager = `
             <div class="parallel-story-floor-pager">
@@ -713,7 +845,9 @@
                 <span>第 ${root._floorPage + 1} / ${pageCount} 页</span>
                 <button data-action="floor-page" data-page="${root._floorPage + 1}" ${root._floorPage >= pageCount - 1 ? 'disabled' : ''}>下一页</button>
             </div>`;
-        list.innerHTML = heading + (rows || '<div class="parallel-story-empty">没有找到匹配的楼层</div>') + pager;
+        const favoriteCount = getStore().favorites.length;
+        const exportBar = '<div class="parallel-story-floor-actions"><button type="button" data-action="show-favorites">收藏夹 · ' + favoriteCount + '</button><button type="button" data-action="open-export-settings" data-index="' + Math.max(0, all.length - 1) + '" data-swipe="0">导出设置</button></div>';
+        list.innerHTML = heading + exportBar + (rows || '<div class="parallel-story-empty">没有找到匹配的楼层</div>') + pager;
         const search = list.querySelector('.parallel-story-floor-search');
         search?.addEventListener('input', () => {
             root._floorQuery = search.value;
@@ -726,6 +860,12 @@
         });
     }
 
+    function showFavoritesPage(root) {
+        const list = root.querySelector('.parallel-story-list'); if (!list) return;
+        const favorites = [...getStore().favorites].sort((a,b) => b.createdAt - a.createdAt);
+        const rows = favorites.map((item) => '<article class="parallel-story-favorite-row"><div class="parallel-story-favorite-meta">' + escapeHtml(item.characterName) + ' · ' + escapeHtml(item.fileName) + ' · 第 ' + (item.floorIndex + 1) + ' 楼 · Swipe ' + (item.swipeIndex + 1) + '</div><div class="parallel-story-favorite-preview">' + escapeHtml(extractFloorContent(item.mes).replace(/\\s+/g, ' ').slice(0,180)) + '</div><div class="parallel-story-favorite-actions"><button data-action="export-favorite-image" data-id="' + escapeHtml(item.id) + '">导出图片</button><button data-action="remove-favorite" data-id="' + escapeHtml(item.id) + '">取消收藏</button></div></article>').join('');
+        list.innerHTML = '<div class="parallel-story-floor-heading"><button class="parallel-story-back" data-action="back-favorites-floor">‹ 返回楼层</button><div class="parallel-story-selected-character">收藏夹 · ' + favorites.length + ' 条</div></div>' + (rows || '<div class="parallel-story-empty">还没有收藏的楼层回复</div>');
+    }
     async function showFloorPicker(root, entry) {
         const list = root.querySelector('.parallel-story-list');
         const count = root.querySelector('.parallel-story-count');
@@ -752,6 +892,7 @@
             const floorMessages = messages.slice(1);
             root._floorEntry = entry;
             root._floorData = floorMessages;
+            root._floorSwipeSelections = {};
             root._floorQuery = '';
             root._floorPage = Math.max(0, Math.ceil(floorMessages.length / 40) - 1);
             if (count) count.textContent = `${floorMessages.length} 楼`;
@@ -1148,6 +1289,13 @@
                 <div class="parallel-story-list"><div class="parallel-story-empty">正在读取酒馆角色卡</div></div>
                 <footer class="parallel-story-footer">聊天正文仍由酒馆原生管理。主线与分支分别管理；当前打开的聊天不能删除。</footer>
             </section>`;
+        root.addEventListener('change', (event) => {
+            const select = event.target.closest('.parallel-story-floor-swipe');
+            if (!select) return;
+            root._floorSwipeSelections ??= {};
+            root._floorSwipeSelections[Number(select.dataset.floorSwipe)] = Number(select.value);
+            renderFloorPage(root);
+        });
         root.addEventListener('click', (event) => {
             if (event.target === root) return closeManager();
             const button = event.target.closest('[data-action]');
@@ -1259,6 +1407,19 @@
             ) : null);
 
         if (action === 'close') return closeManager();
+        if (action === 'favorite-floor') { toggleFloorFavorite(document.getElementById(ROOT_ID), Number(button.dataset.index), Number(button.dataset.swipe)); return; }
+        if (action === 'export-floor-image' || action === 'open-export-settings') { const root = document.getElementById(ROOT_ID); if (root) showFloorExportSettings(root, Number(button.dataset.index), Number(button.dataset.swipe)); return; }
+        if (action === 'show-favorites') { const root = document.getElementById(ROOT_ID); if (root) showFavoritesPage(root); return; }
+        if (action === 'back-favorites-floor') { const root = document.getElementById(ROOT_ID); if (root) renderFloorPage(root); return; }
+        if (action === 'remove-favorite') { const store = getStore(); store.favorites = store.favorites.filter((item) => item.id !== id); saveStore(); const root = document.getElementById(ROOT_ID); if (root) showFavoritesPage(root); return; }
+        if (action === 'export-favorite-image') {
+            const item = getStore().favorites.find((favorite) => favorite.id === id);
+            if (!item) return showNotice('找不到这条收藏。', 'warning');
+            const entry = { characterName: item.characterName, characterAvatar: item.characterAvatar, characterId: item.characterId, characterAvatar: item.characterAvatar, fileName: item.fileName };
+            try { await exportFloorImage(entry, { mes: item.mes, name: item.author, is_user: item.isUser }, item.floorIndex, item.swipeIndex); showNotice('收藏图片已导出。', 'success'); }
+            catch (error) { showNotice(error.message || '图片导出失败。', 'error'); }
+            return;
+        }
         if (action === 'create') return createCurrentBranch();
 
         if (action === 'import-chat') {
