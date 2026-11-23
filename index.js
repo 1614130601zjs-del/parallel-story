@@ -110,6 +110,8 @@
             .replace(/<(status(?:[-_][\w-]+)?)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '')
             .replace(/<bbs[-_]start\b[^>]*>[\s\S]*?<\/bbs[-_]start\s*>/gi, '')
             .replace(/<bbs[-_]end\b[^>]*>[\s\S]*?<\/bbs[-_]end\s*>/gi, '')
+            // Audio/voice direction tags are production cues, not story prose.
+            .replace(/<(?:ambience|ambient|bgm|music|sound|sfx|audio|voice|voiceover|narration)\b[^>]*>[\s\S]*?<\/(?:ambience|ambient|bgm|music|sound|sfx|audio|voice|voiceover|narration)\s*>/gi, '')
             // Prompt notes, progress counters, and other HTML comments.
             .replace(/<!--[\s\S]*?-->/g, '')
             // Non-story padding used to prevent premature response truncation.
