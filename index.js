@@ -226,7 +226,7 @@
         const iframe = document.createElement('iframe');
         iframe.setAttribute('aria-hidden', 'true');
         iframe.tabIndex = -1;
-        iframe.style.cssText = 'position:fixed;left:-20000px;top:0;width:' + width + 'px;height:800px;border:0;visibility:hidden;pointer-events:none;';
+        iframe.style.cssText = 'position:fixed;left:-20000px;top:0;width:' + width + 'px;height:800px;border:0;pointer-events:none;';
         document.body.append(iframe);
 
         try {
@@ -286,11 +286,12 @@
             await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
             const measuredWidth = Math.max(width, Math.ceil(stage.scrollWidth), Math.ceil(stage.getBoundingClientRect().width));
-            const measuredHeight = Math.max(1, Math.ceil(stage.scrollHeight), Math.ceil(stage.getBoundingClientRect().height));
             iframe.style.width = measuredWidth + 'px';
-            iframe.style.height = measuredHeight + 'px';
             stage.style.width = measuredWidth + 'px';
             await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+            const measuredHeight = Math.max(1, Math.ceil(stage.scrollHeight), Math.ceil(stage.getBoundingClientRect().height));
+            iframe.style.height = measuredHeight + 'px';
+            await new Promise((resolve) => requestAnimationFrame(resolve));
 
             const canvas = await html2canvas(stage, {
                 backgroundColor: settings.theme === 'card' ? settings.background : null,
