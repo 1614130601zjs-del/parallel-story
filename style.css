@@ -1318,3 +1318,15 @@
     cursor: pointer;
 }
 .parallel-story-message-action-menu button:hover { background: rgba(128, 128, 128, .14); }
+
+
+.parallel-story-header-actions {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 4px;
+}
+.parallel-story-header-actions .parallel-story-icon-button {
+    min-width: 32px;
+    min-height: 32px;
+}
