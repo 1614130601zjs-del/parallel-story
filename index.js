@@ -115,6 +115,36 @@
         }).catch((error) => { window.__parallelStoryHtml2CanvasPromise = null; throw error; });
         return window.__parallelStoryHtml2CanvasPromise;
     }
+
+    function scopeExportCss(cssText) {
+        if (!String(cssText || '').trim()) return '';
+        const parser = document.createElement('style');
+        parser.textContent = String(cssText);
+        document.head.append(parser);
+        try {
+            const renderRules = (rules) => Array.from(rules || []).map((rule) => {
+                if (rule.type === 1 && rule.selectorText) {
+                    const selectors = rule.selectorText.split(',').map((selector) => {
+                        const value = selector.trim();
+                        return value.startsWith('.ps-export-stage') ? value : '.ps-export-stage ' + value;
+                    }).join(', ');
+                    return selectors + '{' + rule.style.cssText + '}';
+                }
+                if ((rule.type === 4 || rule.type === 12) && rule.cssRules) {
+                    const prefix = rule.cssText.slice(0, rule.cssText.indexOf('{'));
+                    return prefix + '{' + renderRules(rule.cssRules) + '}';
+                }
+                return rule.cssText || '';
+            }).join('\n');
+            return parser.sheet ? renderRules(parser.sheet.cssRules) : '';
+        } catch (error) {
+            console.warn('[档案] 自定义 CSS 解析失败：', error);
+            return '';
+        } finally {
+            parser.remove();
+        }
+    }
+
     async function exportFloorImage(entry, message, floorIndex, swipeIndex, overrides) {
         const settings = Object.assign(getExportSettings(), overrides || {}), html2canvas = await loadHtml2Canvas();
         const context = getContext(), scope = getCurrentScope(context);
@@ -133,7 +163,7 @@
             '.ps-export-stage .ps-export-card-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:18px;font-size:13px;color:#666}' +
             '.ps-export-stage .ps-export-content{font-size:16px;line-height:1.75;letter-spacing:.01em}' +
             '.ps-export-stage img{max-width:100%;height:auto}.ps-export-stage .mes{max-width:100%!important;width:100%!important}' +
-            '.ps-export-theme-card .mes{background:#fff!important;color:#252525!important;border-radius:14px!important;padding:24px!important;box-shadow:0 8px 28px #00000012}' + String(settings.customCss || '');
+            '.ps-export-theme-card .mes{background:#fff!important;color:#252525!important;border-radius:14px!important;padding:24px!important;box-shadow:0 8px 28px #00000012}' + scopeExportCss(settings.customCss);
         stage.append(style);
         let node;
         if (settings.theme === 'native' && source) {
