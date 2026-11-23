@@ -1345,7 +1345,7 @@
                         <div class="parallel-story-title">档案</div>
                         <div class="parallel-story-subtitle">选择角色卡，管理对应聊天记录</div>
                     </div>
-                    <button class="parallel-story-icon-button" data-action="close" aria-label="关闭">×</button>
+                    <div class="parallel-story-header-actions"><button class="parallel-story-icon-button" data-action="show-favorites" aria-label="收藏夹" title="收藏夹">★</button><button class="parallel-story-icon-button" data-action="close" aria-label="关闭">×</button></div>
                 </header>
                 <div class="parallel-story-list"><div class="parallel-story-empty">正在读取酒馆角色卡</div></div>
                 <footer class="parallel-story-footer">聊天正文仍由酒馆原生管理。主线与分支分别管理；当前打开的聊天不能删除。</footer>
@@ -1470,10 +1470,10 @@
         if (action === 'close') return closeManager();
         if (action === 'favorite-floor') { toggleFloorFavorite(document.getElementById(ROOT_ID), Number(button.dataset.index), Number(button.dataset.swipe)); return; }
         if (action === 'export-floor-image' || action === 'open-export-settings') { const root = document.getElementById(ROOT_ID); if (root) showFloorExportSettings(root, Number(button.dataset.index), Number(button.dataset.swipe)); return; }
-        if (action === 'show-favorites') { const root = document.getElementById(ROOT_ID); if (root) { delete root.dataset.favoriteCharacterAvatar; showFavoritesPage(root); } return; }
+        if (action === 'show-favorites') { const root = document.getElementById(ROOT_ID); if (root) { root.dataset.favoritesReturn = root._floorEntry ? 'floor' : 'home'; delete root.dataset.favoriteCharacterAvatar; showFavoritesPage(root); } return; }
         if (action === 'favorite-character') { const root = document.getElementById(ROOT_ID); if (root) { root.dataset.favoriteCharacterAvatar = button.dataset.avatar || ''; showFavoritesPage(root, root.dataset.favoriteCharacterAvatar); } return; }
         if (action === 'back-favorites') { const root = document.getElementById(ROOT_ID); if (root) { delete root.dataset.favoriteCharacterAvatar; showFavoritesPage(root); } return; }
-        if (action === 'back-favorites-floor') { const root = document.getElementById(ROOT_ID); if (root) renderFloorPage(root); return; }
+        if (action === 'back-favorites-floor') { const root = document.getElementById(ROOT_ID); if (root) { if (root.dataset.favoritesReturn === 'floor' && root._floorEntry) renderFloorPage(root); else { delete root.dataset.selectedCharacterId; renderCharacterCards(root, root._entries || []); } } return; }
         if (action === 'remove-favorite') { const store = getStore(); store.favorites = store.favorites.filter((item) => item.id !== id); saveStore(); const root = document.getElementById(ROOT_ID); if (root) showFavoritesPage(root, root.dataset.favoriteCharacterAvatar || null); return; }
         if (action === 'export-favorite-image') {
             const item = getStore().favorites.find((favorite) => favorite.id === id);
