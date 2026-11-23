@@ -107,32 +107,32 @@
     function stripAuxiliaryFloorContent(value) {
         return String(value ?? '')
             // Remove preset status blocks and timestamps that are metadata, not story prose.
-            .replace(/<(status(?:[-_][\\w-]+)?)\\b[^>]*>[\\s\\S]*?<\\/\\1\\s*>/gi, '')
-            .replace(/<bbs[-_]start\\b[^>]*>[\\s\\S]*?<\\/bbs[-_]start\\s*>/gi, '')
-            .replace(/<bbs[-_]end\\b[^>]*>[\\s\\S]*?<\\/bbs[-_]end\\s*>/gi, '')
+            .replace(/<(status(?:[-_][\w-]+)?)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '')
+            .replace(/<bbs[-_]start\b[^>]*>[\s\S]*?<\/bbs[-_]start\s*>/gi, '')
+            .replace(/<bbs[-_]end\b[^>]*>[\s\S]*?<\/bbs[-_]end\s*>/gi, '')
             // Prompt notes, progress counters, and other HTML comments.
-            .replace(/<!--[\\s\\S]*?-->/g, '')
+            .replace(/<!--[\s\S]*?-->/g, '')
             // Non-story padding used to prevent premature response truncation.
-            .replace(/<pour\\b[^>]*>[\\s\\S]*?<\\/pour\\s*>/gi, '')
+            .replace(/<pour\b[^>]*>[\s\S]*?<\/pour\s*>/gi, '')
             // Image-planning instructions and generated image metadata.
-            .replace(/<imgthink\\b[^>]*>[\\s\\S]*?<\\/imgthink\\s*>/gi, '')
-            .replace(/<img-title\\b[^>]*>[\\s\\S]*?<\\/img-title\\s*>/gi, '')
-            .replace(/title###[\\s\\S]*?###/gi, '')
-            .replace(/image###[\\s\\S]*?###/gi, '')
+            .replace(/<imgthink\b[^>]*>[\s\S]*?<\/imgthink\s*>/gi, '')
+            .replace(/<img-title\b[^>]*>[\s\S]*?<\/img-title\s*>/gi, '')
+            .replace(/title###[\s\S]*?###/gi, '')
+            .replace(/image###[\s\S]*?###/gi, '')
             // Variable patches and suggested action menus are not story text.
-            .replace(/<UpdateVariable\\b[^>]*>[\\s\\S]*?<\\/UpdateVariable\\s*>/gi, '')
-            .replace(/<ActionChoices\\b[^>]*>[\\s\\S]*?<\\/ActionChoices\\s*>/gi, '')
+            .replace(/<UpdateVariable\b[^>]*>[\s\S]*?<\/UpdateVariable\s*>/gi, '')
+            .replace(/<ActionChoices\b[^>]*>[\s\S]*?<\/ActionChoices\s*>/gi, '')
             // Easter-egg chat room payloads.
-            .replace(/eggroom###[\\s\\S]*?###/gi, '')
-            .replace(/eggmsg###[\\s\\S]*?###/gi, '')
+            .replace(/eggroom###[\s\S]*?###/gi, '')
+            .replace(/eggmsg###[\s\S]*?###/gi, '')
             .replace(/eggend###/gi, '')
-            .replace(/\\n[ \\t]*\\n(?:[ \\t]*\\n)+/g, '\\n\\n')
+            .replace(/\n[ \t]*\n(?:[ \t]*\n)+/g, '\n\n')
             .trim();
     }
 
     function extractFloorContent(value) {
         const raw = String(value ?? '');
-        const contentMatch = raw.match(/<content\\b[^>]*>([\\s\\S]*?)<\\/content\\s*>/i);
+        const contentMatch = raw.match(/<content\b[^>]*>([\s\S]*?)<\/content\s*>/i);
 
         // When a content block exists, only its inner text is eligible for preview.
         // Everything before/after it (status bars, footer metadata, etc.) is ignored.
@@ -142,11 +142,11 @@
 
         // Compatibility for older messages that do not use an explicit content block.
         let content = raw;
-        const draftStart = raw.search(/<draft\\b[^>]*>/i);
+        const draftStart = raw.search(/<draft\b[^>]*>/i);
         if (draftStart >= 0) {
             const separator = raw.indexOf('-->', draftStart);
             if (separator >= 0) {
-                content = raw.slice(separator + 3).replace(/<\\/draft\\s*>/gi, '');
+                content = raw.slice(separator + 3).replace(/<\/draft\s*>/gi, '');
             } else {
                 content = raw.slice(0, draftStart);
             }
