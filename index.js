@@ -145,54 +145,172 @@
         }
     }
 
+    function copyExportStylesToFrame(frameDocument) {
+        const pending = [];
+        document.querySelectorAll('link[rel~="stylesheet"], style').forEach((sourceNode) => {
+            const clone = sourceNode.cloneNode(true);
+            if (clone.tagName === 'LINK') {
+                pending.push(new Promise((resolve) => {
+                    let settled = false;
+                    const finish = () => { if (settled) return; settled = true; resolve(); };
+                    clone.addEventListener('load', finish, { once: true });
+                    clone.addEventListener('error', finish, { once: true });
+                    setTimeout(finish, 4500);
+                }));
+            }
+            frameDocument.head.append(clone);
+        });
+
+        const rootStyle = getComputedStyle(document.documentElement);
+        const bodyStyle = document.body ? getComputedStyle(document.body) : null;
+        for (const [target, computed] of [[frameDocument.documentElement, rootStyle], [frameDocument.body, bodyStyle]]) {
+            if (!computed) continue;
+            for (let index = 0; index < computed.length; index += 1) {
+                const property = computed[index];
+                if (property.startsWith('--')) target.style.setProperty(property, computed.getPropertyValue(property));
+            }
+        }
+        frameDocument.documentElement.className = document.documentElement.className;
+        if (document.body) frameDocument.body.className = document.body.className;
+        return Promise.all(pending);
+    }
+
+    function freezeExportTypography(sourceNode, frameWindow) {
+        const nodes = [sourceNode, ...sourceNode.querySelectorAll('*')];
+        const fontLoads = new Map();
+        nodes.forEach((node) => {
+            if (!(node instanceof frameWindow.HTMLElement)) return;
+            const computed = frameWindow.getComputedStyle(node);
+            ['font-family', 'font-size', 'font-weight', 'font-style', 'line-height', 'letter-spacing', 'text-transform'].forEach((property) => {
+                const value = computed.getPropertyValue(property);
+                if (value) node.style.setProperty(property, value);
+            });
+            const family = computed.fontFamily;
+            const size = computed.fontSize;
+            const weight = computed.fontWeight;
+            if (family && size) {
+                const key = [family, size, weight].join('|');
+                if (!fontLoads.has(key)) fontLoads.set(key, { family, size, weight, sample: (node.textContent || '').trim().slice(0, 80) || '档案 Story' });
+            }
+        });
+        return Array.from(fontLoads.values());
+    }
+
+    async function waitForExportImages(root) {
+        const images = Array.from(root.querySelectorAll('img'));
+        await Promise.all(images.map(async (img) => {
+            if (!img.complete) {
+                await new Promise((resolve) => {
+                    let settled = false;
+                    const finish = () => { if (settled) return; settled = true; resolve(); };
+                    img.addEventListener('load', finish, { once: true });
+                    img.addEventListener('error', finish, { once: true });
+                    setTimeout(finish, 5000);
+                });
+            }
+            if (img.decode) await img.decode().catch(() => {});
+        }));
+    }
+
     async function renderFloorImageBlob(entry, message, floorIndex, swipeIndex, overrides) {
-        const settings = Object.assign(getExportSettings(), overrides || {}), html2canvas = await loadHtml2Canvas();
+        const settings = Object.assign(getExportSettings(), overrides || {});
+        const html2canvas = await loadHtml2Canvas();
         const context = getContext(), scope = getCurrentScope(context);
         const sameChat = normalizeChatFile(getCurrentChatFile(context)) === normalizeChatFile(entry.fileName) && scope.characterAvatar === entry.characterAvatar;
         const source = sameChat ? document.querySelector('#chat .mes[mesid="' + floorIndex + '"]') : null;
         const swipes = getFloorSwipeList(message).swipes;
         const content = String(swipes[swipeIndex] == null ? message.mes || '' : swipes[swipeIndex]);
         const author = message.name || (message.is_user ? '用户' : entry.characterName || '角色');
-        const stage = document.createElement('div');
-        stage.className = 'ps-export-stage ps-export-theme-' + settings.theme;
-        if (settings.theme === 'native') stage.id = 'chat';
-        stage.style.cssText = 'position:fixed;left:-12000px;top:0;width:' + Math.max(360, Math.min(1600, Number(settings.width) || 860)) + 'px;padding:' + Math.max(0, Math.min(120, Number(settings.padding) || 32)) + 'px;background:' + (settings.background || '#f4f4f4') + ';z-index:-1;box-sizing:border-box;';
-        const style = document.createElement('style');
-        style.textContent = '.ps-export-stage{font-family:var(--mainFont,Arial,sans-serif);color:var(--SmartThemeBodyColor,#252525);overflow:visible}' +
-            '.ps-export-stage .ps-export-card{background:#fff;color:#252525;border-radius:14px;padding:24px;box-shadow:0 8px 28px #00000012;overflow-wrap:anywhere}' +
-            '.ps-export-stage .ps-export-card-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:18px;font-size:13px;color:#666}' +
-            '.ps-export-stage .ps-export-content{font-size:16px;line-height:1.75;letter-spacing:.01em}' +
-            '.ps-export-stage img{max-width:100%;height:auto}.ps-export-stage .mes{max-width:100%!important;width:100%!important}' +
-            '.ps-export-theme-card .mes{background:#fff!important;color:#252525!important;border-radius:14px!important;padding:24px!important;box-shadow:0 8px 28px #00000012}' + scopeExportCss(settings.customCss);
-        stage.append(style);
-        let node;
-        if (settings.theme === 'native' && source) {
-            node = source.cloneNode(true);
-            node.querySelectorAll('.mes_buttons,.mes_edit_buttons,.mes_timer,.mesIDDisplay').forEach((el) => el.remove());
-            const body = node.querySelector('.mes_text');
-            if (body && swipeIndex !== getFloorSwipeList(message).current) body.innerHTML = content;
-            node.style.setProperty('display', 'block', 'important');
-            node.style.setProperty('position', 'relative', 'important');
-            node.style.setProperty('width', '100%', 'important');
-            node.style.setProperty('max-width', '100%', 'important');
-            node.style.setProperty('margin', '0', 'important');
-        } else {
-            node = document.createElement('article'); node.className = 'ps-export-card';
-            node.innerHTML = '<header class="ps-export-card-head">' + (settings.showAuthor ? '<strong>' + escapeHtml(author) + '</strong>' : '') +
-                (settings.showFloor ? '<span>第 ' + (floorIndex + 1) + ' 楼 · Swipe ' + (swipeIndex + 1) + '</span>' : '') +
-                '</header><div class="ps-export-content">' + content + '</div>';
-        }
-        stage.append(node); document.body.append(stage);
+        const width = Math.max(360, Math.min(1600, Number(settings.width) || 860));
+        const padding = Math.max(0, Math.min(120, Number(settings.padding) || 32));
+        const iframe = document.createElement('iframe');
+        iframe.setAttribute('aria-hidden', 'true');
+        iframe.tabIndex = -1;
+        iframe.style.cssText = 'position:fixed;left:-20000px;top:0;width:' + width + 'px;height:800px;border:0;visibility:hidden;pointer-events:none;';
+        document.body.append(iframe);
+
         try {
-            if (document.fonts && document.fonts.ready) await document.fonts.ready;
-            await Promise.all(Array.from(stage.querySelectorAll('img')).map((img) => img.complete ? Promise.resolve() : new Promise((resolve) => {
-                img.onload = resolve; img.onerror = resolve; setTimeout(resolve, 3500);
-            })));
-            const canvas = await html2canvas(stage, { backgroundColor: settings.theme === 'card' ? settings.background : null,
-                scale: Math.min(2, window.devicePixelRatio || 1), useCORS: true, allowTaint: false, logging: false,
-                width: stage.scrollWidth, height: stage.scrollHeight, windowWidth: Math.max(document.documentElement.clientWidth, stage.scrollWidth) });
-            return await new Promise((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error('图片生成失败')), 'image/png'));
-        } finally { stage.remove(); }
+            const frameDocument = iframe.contentDocument;
+            if (!frameDocument) throw new Error('无法创建独立图片渲染环境');
+            frameDocument.open();
+            frameDocument.write('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><title>档案图片导出</title></head><body></body></html>');
+            frameDocument.close();
+            await copyExportStylesToFrame(frameDocument);
+
+            const stage = frameDocument.createElement('div');
+            stage.className = 'ps-export-stage ps-export-theme-' + settings.theme;
+            if (settings.theme === 'native') stage.id = 'chat';
+            stage.style.cssText = 'display:block;position:relative;width:' + width + 'px;min-height:1px;padding:' + padding + 'px;background:' + (settings.background || '#f4f4f4') + ';box-sizing:border-box;overflow:visible;zoom:1;';
+            const exportStyle = frameDocument.createElement('style');
+            exportStyle.textContent = 'html,body{margin:0!important;padding:0!important;width:100%;min-height:0!important;-webkit-text-size-adjust:100%!important;text-size-adjust:100%!important}' +
+                '.ps-export-stage{font-family:var(--mainFont,Arial,sans-serif);color:var(--SmartThemeBodyColor,#252525);overflow:visible}' +
+                '.ps-export-stage .ps-export-card{background:#fff;color:#252525;border-radius:14px;padding:24px;box-shadow:0 8px 28px #00000012;overflow-wrap:anywhere}' +
+                '.ps-export-stage .ps-export-card-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:18px;font-size:13px;color:#666}' +
+                '.ps-export-stage .ps-export-content{font-size:16px;line-height:1.75;letter-spacing:.01em}' +
+                '.ps-export-stage img{max-width:100%;height:auto}.ps-export-stage .mes{max-width:100%!important;width:100%!important}' +
+                '.ps-export-theme-card .mes{background:#fff!important;color:#252525!important;border-radius:14px!important;padding:24px!important;box-shadow:0 8px 28px #00000012}' +
+                scopeExportCss(settings.customCss);
+            frameDocument.head.append(exportStyle);
+
+            let node;
+            if (settings.theme === 'native' && source) {
+                node = frameDocument.importNode(source, true);
+                node.querySelectorAll('.mes_buttons,.mes_edit_buttons,.mes_timer,.mesIDDisplay').forEach((element) => element.remove());
+                const body = node.querySelector('.mes_text');
+                if (body && swipeIndex !== getFloorSwipeList(message).current) body.innerHTML = content;
+                node.style.setProperty('display', 'block', 'important');
+                node.style.setProperty('position', 'relative', 'important');
+                node.style.setProperty('width', '100%', 'important');
+                node.style.setProperty('max-width', '100%', 'important');
+                node.style.setProperty('margin', '0', 'important');
+            } else {
+                node = frameDocument.createElement('article');
+                node.className = 'ps-export-card';
+                node.innerHTML = '<header class="ps-export-card-head">' + (settings.showAuthor ? '<strong>' + escapeHtml(author) + '</strong>' : '') +
+                    (settings.showFloor ? '<span>第 ' + (floorIndex + 1) + ' 楼 · Swipe ' + (swipeIndex + 1) + '</span>' : '') +
+                    '</header><div class="ps-export-content">' + content + '</div>';
+            }
+            stage.append(node);
+            frameDocument.body.append(stage);
+
+            // 让 iframe 中的样式表先完成首轮布局，再冻结源页面实际使用的字体参数。
+            await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+            const fontSpecs = freezeExportTypography(node, iframe.contentWindow);
+            if (frameDocument.fonts) {
+                await Promise.all(fontSpecs.map(({ family, size, weight, sample }) =>
+                    frameDocument.fonts.load(weight + ' ' + size + ' ' + family, sample).catch(() => [])
+                ));
+                await frameDocument.fonts.ready;
+            }
+            await waitForExportImages(stage);
+            await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+            const measuredWidth = Math.max(width, Math.ceil(stage.scrollWidth), Math.ceil(stage.getBoundingClientRect().width));
+            const measuredHeight = Math.max(1, Math.ceil(stage.scrollHeight), Math.ceil(stage.getBoundingClientRect().height));
+            iframe.style.width = measuredWidth + 'px';
+            iframe.style.height = measuredHeight + 'px';
+            stage.style.width = measuredWidth + 'px';
+            await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+            const canvas = await html2canvas(stage, {
+                backgroundColor: settings.theme === 'card' ? settings.background : null,
+                scale: Math.min(2, window.devicePixelRatio || 1),
+                useCORS: true,
+                allowTaint: false,
+                logging: false,
+                width: measuredWidth,
+                height: measuredHeight,
+                windowWidth: measuredWidth,
+                windowHeight: measuredHeight,
+                scrollX: 0,
+                scrollY: 0,
+            });
+            return await new Promise((resolve, reject) =>
+                canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('图片生成失败')), 'image/png')
+            );
+        } finally {
+            iframe.remove();
+        }
     }
 
     function downloadFloorImage(blob, entry, floorIndex, swipeIndex) {
