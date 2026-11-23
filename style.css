@@ -1286,13 +1286,18 @@
     position: relative;
     display: inline-flex;
     align-items: center;
+    z-index: 2147483647;
+}
+.parallel-story-floor-branch-wrap:focus-within,
+.parallel-story-floor-branch-wrap:has(.parallel-story-message-action-menu.is-open) {
+    z-index: 2147483647;
 }
 .parallel-story-floor-branch-wrap .parallel-story-floor-branch { cursor: pointer; }
 .parallel-story-message-action-menu {
     position: absolute;
     right: 0;
     top: calc(100% + 5px);
-    z-index: 10050;
+    z-index: 2147483647;
     display: none;
     flex-direction: column;
     min-width: 132px;
