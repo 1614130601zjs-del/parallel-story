@@ -212,127 +212,89 @@
         }));
     }
 
-    async function renderFloorImageBlob(entry, message, floorIndex, swipeIndex, overrides) {
-        const settings = Object.assign(getExportSettings(), overrides || {});
-        const html2canvas = await loadHtml2Canvas();
-        const context = getContext(), scope = getCurrentScope(context);
-        const sameChat = normalizeChatFile(getCurrentChatFile(context)) === normalizeChatFile(entry.fileName) && scope.characterAvatar === entry.characterAvatar;
-        const source = sameChat ? document.querySelector('#chat .mes[mesid="' + floorIndex + '"]') : null;
-        const swipes = getFloorSwipeList(message).swipes;
-        const content = String(swipes[swipeIndex] == null ? message.mes || '' : swipes[swipeIndex]);
-        const author = message.name || (message.is_user ? '用户' : entry.characterName || '角色');
-        const width = Math.max(360, Math.min(1600, Number(settings.width) || 860));
-        const padding = Math.max(0, Math.min(120, Number(settings.padding) || 32));
-        const iframe = document.createElement('iframe');
-        iframe.setAttribute('aria-hidden', 'true');
-        iframe.tabIndex = -1;
-        iframe.style.cssText = 'position:fixed;left:-20000px;top:0;width:' + width + 'px;height:800px;border:0;pointer-events:none;';
-        document.body.append(iframe);
-
-        try {
-            const frameDocument = iframe.contentDocument;
-            if (!frameDocument) throw new Error('无法创建独立图片渲染环境');
-            frameDocument.open();
-            frameDocument.write('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><title>档案图片导出</title></head><body></body></html>');
-            frameDocument.close();
-            await copyExportStylesToFrame(frameDocument);
-
-            const stage = frameDocument.createElement('div');
-            stage.className = 'ps-export-stage ps-export-theme-' + settings.theme;
-            if (settings.theme === 'native') stage.id = 'chat';
-            stage.style.cssText = 'display:block;position:relative;width:' + width + 'px;min-height:1px;padding:' + padding + 'px;background:' + (settings.background || '#f4f4f4') + ';box-sizing:border-box;overflow:visible;zoom:1;';
-            const exportStyle = frameDocument.createElement('style');
-            exportStyle.textContent = 'html,body{margin:0!important;padding:0!important;width:100%;min-height:0!important;-webkit-text-size-adjust:100%!important;text-size-adjust:100%!important}' +
-                '.ps-export-stage{font-family:var(--mainFont,Arial,sans-serif);color:var(--SmartThemeBodyColor,#252525);overflow:visible}' +
-                '.ps-export-stage .ps-export-card{background:#fff;color:#252525;border-radius:14px;padding:24px;box-shadow:0 8px 28px #00000012;overflow-wrap:anywhere}' +
-                '.ps-export-stage .ps-export-card-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:18px;font-size:13px;color:#666}' +
-                '.ps-export-stage .ps-export-content{font-size:16px;line-height:1.75;letter-spacing:.01em}' +
-                '.ps-export-stage img{max-width:100%;height:auto}.ps-export-stage .mes{max-width:100%!important;width:100%!important}' +
-                '.ps-export-theme-card .mes{background:#fff!important;color:#252525!important;border-radius:14px!important;padding:24px!important;box-shadow:0 8px 28px #00000012}' +
-                scopeExportCss(settings.customCss);
-            frameDocument.head.append(exportStyle);
-
-            let node;
-            if (settings.theme === 'native' && source) {
-                node = frameDocument.importNode(source, true);
-                node.querySelectorAll('.mes_buttons,.mes_edit_buttons,.mes_timer,.mesIDDisplay').forEach((element) => element.remove());
-                const body = node.querySelector('.mes_text');
-                if (body && swipeIndex !== getFloorSwipeList(message).current) body.innerHTML = content;
-                node.style.setProperty('display', 'block', 'important');
-                node.style.setProperty('position', 'relative', 'important');
-                node.style.setProperty('width', '100%', 'important');
-                node.style.setProperty('max-width', '100%', 'important');
-                node.style.setProperty('margin', '0', 'important');
-            } else {
-                node = frameDocument.createElement('article');
-                node.className = 'ps-export-card';
-                node.innerHTML = '<header class="ps-export-card-head">' + (settings.showAuthor ? '<strong>' + escapeHtml(author) + '</strong>' : '') +
-                    (settings.showFloor ? '<span>第 ' + (floorIndex + 1) + ' 楼 · Swipe ' + (swipeIndex + 1) + '</span>' : '') +
-                    '</header><div class="ps-export-content">' + content + '</div>';
-            }
-            stage.append(node);
-            frameDocument.body.append(stage);
-
-            // 让 iframe 中的样式表先完成首轮布局，再冻结源页面实际使用的字体参数。
-            await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-            const fontSpecs = freezeExportTypography(node, iframe.contentWindow);
-            if (frameDocument.fonts) {
-                await Promise.all(fontSpecs.map(({ family, size, weight, sample }) =>
-                    frameDocument.fonts.load(weight + ' ' + size + ' ' + family, sample).catch(() => [])
-                ));
-                await frameDocument.fonts.ready;
-            }
-            await waitForExportImages(stage);
-            await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-
-            const measuredWidth = Math.max(width, Math.ceil(stage.scrollWidth), Math.ceil(stage.getBoundingClientRect().width));
-            iframe.style.width = measuredWidth + 'px';
-            stage.style.width = measuredWidth + 'px';
-            await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-            const measuredHeight = Math.max(1, Math.ceil(stage.scrollHeight), Math.ceil(stage.getBoundingClientRect().height));
-            iframe.style.height = measuredHeight + 'px';
-            await new Promise((resolve) => requestAnimationFrame(resolve));
-
-            const captureOptions = {
-                backgroundColor: settings.theme === 'card' ? settings.background : null,
-                scale: Math.min(2, window.devicePixelRatio || 1),
-                useCORS: true,
-                allowTaint: false,
-                logging: false,
-                width: measuredWidth,
-                height: measuredHeight,
-                windowWidth: measuredWidth,
-                windowHeight: measuredHeight,
-                scrollX: 0,
-                scrollY: 0,
-            };
-            let canvas;
-            try {
-                canvas = await html2canvas(stage, captureOptions);
-            } catch (error) {
-                // html2canvas 1.4.1 会在解析部分主题渐变角度时抛出
-                // Unsupported angle type。仅在该错误出现时降级移除 CSS 背景图，
-                // 保留背景色、正文、真实图片和布局后重新截图。
-                if (!/Unsupported angle type/i.test(String(error && error.message || error))) throw error;
-                console.warn('[档案] 检测到截图组件不支持主题渐变角度，正在使用兼容样式重试。', error);
-                const retryOptions = Object.assign({}, captureOptions, {
-                    onclone: (clonedDocument) => {
-                        const fallbackStyle = clonedDocument.createElement('style');
-                        fallbackStyle.textContent = '*{background-image:none!important}*::before,*::after{background-image:none!important}';
-                        clonedDocument.head.append(fallbackStyle);
-                        clonedDocument.querySelectorAll('[style]').forEach((element) => {
-                            element.style.setProperty('background-image', 'none', 'important');
-                        });
-                    },
-                });
-                canvas = await html2canvas(stage, retryOptions);
-            }
-            return await new Promise((resolve, reject) =>
-                canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('图片生成失败')), 'image/png')
-            );
-        } finally {
-            iframe.remove();
+    async function renderFloorImageBlob(entry, message, floorIndex, swipeIndex) {
+        const context = getContext();
+        const scope = getCurrentScope(context);
+        const sameChat = normalizeChatFile(getCurrentChatFile(context)) === normalizeChatFile(entry.fileName)
+            && scope.characterAvatar === entry.characterAvatar;
+        if (!sameChat) {
+            throw new Error('长截图只能拍摄当前已经打开的聊天。请先打开这条聊天记录，再导出对应楼层。');
         }
+
+        const source = document.querySelector('#chat .mes[mesid="' + floorIndex + '"]');
+        if (!source) throw new Error('酒馆当前没有渲染这一楼。请先在聊天窗口中定位到该楼层，再重试。');
+
+        const swipeState = getFloorSwipeList(message);
+        if (swipeIndex !== swipeState.current) {
+            throw new Error('这一楼当前显示的是第 ' + (swipeState.current + 1) + ' 条回复。请先在酒馆切换到要导出的回复，再点击导出。');
+        }
+
+        const html2canvas = await loadHtml2Canvas();
+        if (document.fonts?.ready) await document.fonts.ready;
+        await waitForExportImages(source);
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+        const rect = source.getBoundingClientRect();
+        const width = Math.ceil(rect.width);
+        const height = Math.ceil(Math.max(source.scrollHeight, rect.height));
+        if (!width || !height) throw new Error('楼层尚未完成排版，无法截图。');
+        const pixelScale = Math.min(1.5, window.devicePixelRatio || 1, Math.sqrt(24000000 / (width * height)));
+        if (!Number.isFinite(pixelScale) || pixelScale <= 0) throw new Error('楼层图片尺寸超出设备可处理范围。');
+
+        const output = document.createElement('canvas');
+        output.width = Math.max(1, Math.ceil(width * pixelScale));
+        output.height = Math.max(1, Math.ceil(height * pixelScale));
+        const outputContext = output.getContext('2d');
+        if (!outputContext) throw new Error('无法创建长截图画布。');
+
+        const chunkHeight = 2600;
+        const captureBase = {
+            scale: pixelScale,
+            useCORS: true,
+            allowTaint: false,
+            logging: false,
+            width,
+            windowWidth: Math.max(document.documentElement.clientWidth, Math.ceil(rect.right)),
+            windowHeight: Math.max(document.documentElement.clientHeight, Math.ceil(rect.bottom)),
+            scrollX: -window.scrollX,
+            scrollY: -window.scrollY,
+            ignoreElements: (element) => element.matches?.(
+                '.mes_buttons, .mes_edit_buttons, .mes_timer, .mesIDDisplay, .parallel-story-floor-branch-wrap'
+            ) || Boolean(element.closest?.('.mes_buttons, .mes_edit_buttons')),
+        };
+
+        for (let top = 0; top < height; top += chunkHeight) {
+            const partHeight = Math.min(chunkHeight, height - top);
+            const options = Object.assign({}, captureBase, {
+                x: rect.left + window.scrollX,
+                y: rect.top + window.scrollY + top,
+                height: partHeight,
+            });
+            let part;
+            try {
+                part = await html2canvas(source, options);
+            } catch (error) {
+                if (!/Unsupported angle type/i.test(String(error?.message || error))) throw error;
+                console.warn('[档案] 截图遇到不受支持的渐变角度，正在使用兼容模式重试。', error);
+                options.onclone = (clonedDocument) => {
+                    const fallback = clonedDocument.createElement('style');
+                    fallback.textContent = '*{background-image:none!important;mask-image:none!important}*::before,*::after{background-image:none!important;mask-image:none!important}';
+                    clonedDocument.head.append(fallback);
+                    clonedDocument.querySelectorAll('[style]').forEach((element) => {
+                        element.style.setProperty('background-image', 'none', 'important');
+                        element.style.setProperty('mask-image', 'none', 'important');
+                    });
+                };
+                part = await html2canvas(source, options);
+            }
+            outputContext.drawImage(part, 0, 0, part.width, part.height, 0, Math.round(top * pixelScale), output.width, Math.round(partHeight * pixelScale));
+            part.width = 1;
+            part.height = 1;
+        }
+
+        return await new Promise((resolve, reject) => {
+            output.toBlob((blob) => blob ? resolve(blob) : reject(new Error('长截图 PNG 生成失败')), 'image/png');
+        });
     }
 
     function downloadFloorImage(blob, entry, floorIndex, swipeIndex) {
@@ -368,45 +330,34 @@
 
     function showFloorExportSettings(root, floorIndex, swipeIndex, entryOverride = null, dataOverride = null) {
         document.querySelector('.parallel-story-export-settings')?.remove();
-        const settings = getExportSettings(), dialog = document.createElement('section');
+        const dialog = document.createElement('section');
         dialog.className = 'parallel-story-export-settings';
-        dialog.innerHTML = '<div class="parallel-story-export-dialog" role="dialog" aria-modal="true" aria-label="图片导出设置">' +
-            '<header><strong>图片导出</strong><button type="button" data-export-action="close">×</button></header>' +
-            '<div class="parallel-story-export-options"><label>导出样式<select data-export-setting="theme"><option value="native"' + (settings.theme === 'native' ? ' selected' : '') + '>原生复刻</option><option value="card"' + (settings.theme === 'card' ? ' selected' : '') + '>精致卡片</option></select></label>' +
-            '<label>图片宽度（px）<input data-export-setting="width" type="number" min="360" max="1600" value="' + Number(settings.width) + '"></label>' +
-            '<label>四周留白（px）<input data-export-setting="padding" type="number" min="0" max="120" value="' + Number(settings.padding) + '"></label>' +
-            '<label>背景颜色<input data-export-setting="background" type="text" value="' + escapeHtml(settings.background) + '"></label>' +
-            '<label class="ps-export-check"><input data-export-setting="showAuthor" type="checkbox"' + (settings.showAuthor ? ' checked' : '') + '>显示作者信息</label>' +
-            '<label class="ps-export-check"><input data-export-setting="showFloor" type="checkbox"' + (settings.showFloor ? ' checked' : '') + '>显示楼层编号</label></div>' +
-            '<label class="parallel-story-export-css-label">自定义 CSS <span>仅影响导出图片</span></label>' +
-            '<textarea class="parallel-story-export-css" data-export-setting="customCss" spellcheck="false" placeholder=".ps-export-content { font-family: serif; letter-spacing: .04em; line-height: 2; }">' + escapeHtml(settings.customCss) + '</textarea>' +
-            '<div class="parallel-story-export-hint">可使用 .ps-export-stage、.ps-export-card、.ps-export-content、.mes、.mes_text 等选择器。</div>' +
-            '<footer><button type="button" data-export-action="save">保存样式</button><button type="button" data-export-action="preview">预览图片</button></footer></div>';
+        dialog.innerHTML = '<div class="parallel-story-export-dialog" role="dialog" aria-modal="true" aria-label="楼层长截图">' +
+            '<header><strong>导出楼层长截图</strong><button type="button" data-export-action="close" aria-label="关闭">×</button></header>' +
+            '<div class="parallel-story-export-hint">将直接截取酒馆当前渲染的这一楼，保留当前主题、字体、气泡、图片与排版。超长楼层会自动分段拼接。请先在酒馆切换到要导出的 Swipe。</div>' +
+            '<div class="parallel-story-export-hint">目前仅支持当前已打开聊天中已经渲染的楼层，不会用档案的样式重新排版。</div>' +
+            '<footer><button type="button" data-export-action="preview">生成长截图预览</button></footer></div>';
         dialog.addEventListener('click', async (event) => {
             if (event.target === dialog || event.target.closest('[data-export-action="close"]')) return dialog.remove();
-            const action = event.target.closest('[data-export-action]')?.dataset.exportAction;
-            if (action !== 'save' && action !== 'preview') return;
-            const next = Object.assign({}, getExportSettings());
-            dialog.querySelectorAll('[data-export-setting]').forEach((input) => {
-                const key = input.dataset.exportSetting;
-                next[key] = input.type === 'checkbox' ? input.checked : input.type === 'number' ? Number(input.value) : input.value;
-            });
-            getStore().exportSettings = next; saveStore();
-            if (action === 'save') return showNotice('导出样式已保存。', 'success');
+            if (!event.target.closest('[data-export-action="preview"]')) return;
             const sourceData = dataOverride || root._floorData;
             const sourceEntry = entryOverride || root._floorEntry;
             const message = sourceData && sourceData[floorIndex];
             if (!message || !sourceEntry) return showNotice('找不到要导出的楼层。', 'error');
             const button = dialog.querySelector('[data-export-action="preview"]');
-            button.disabled = true; button.textContent = '正在生成预览…';
+            button.disabled = true;
+            button.textContent = '正在截取并拼接…';
             try {
-                const blob = await renderFloorImageBlob(sourceEntry, message, floorIndex, swipeIndex, next);
+                const blob = await renderFloorImageBlob(sourceEntry, message, floorIndex, swipeIndex);
                 showFloorExportPreview(blob, sourceEntry, floorIndex, swipeIndex);
             } catch (error) {
-                console.error('[档案] 图片预览失败：', error);
-                showNotice(error.message || '图片预览失败。', 'error');
+                console.error('[档案] 楼层长截图失败：', error);
+                showNotice(error.message || '楼层长截图失败。', 'error');
             } finally {
-                if (button.isConnected) { button.disabled = false; button.textContent = '预览图片'; }
+                if (button.isConnected) {
+                    button.disabled = false;
+                    button.textContent = '生成长截图预览';
+                }
             }
         });
         document.body.append(dialog);
