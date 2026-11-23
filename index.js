@@ -290,6 +290,11 @@
             outputContext.drawImage(part, 0, 0, part.width, part.height, 0, Math.round(top * pixelScale), output.width, Math.round(partHeight * pixelScale));
             part.width = 1;
             part.height = 1;
+
+            // Yield to the browser between slices so SillyTavern remains interactive.
+            if (top + partHeight < height) {
+                await new Promise((resolve) => setTimeout(resolve, 32));
+            }
         }
 
         return await new Promise((resolve, reject) => {
@@ -344,20 +349,15 @@
             const sourceEntry = entryOverride || root._floorEntry;
             const message = sourceData && sourceData[floorIndex];
             if (!message || !sourceEntry) return showNotice('找不到要导出的楼层。', 'error');
-            const button = dialog.querySelector('[data-export-action="preview"]');
-            button.disabled = true;
-            button.textContent = '正在截取并拼接…';
+            // Close the modal immediately; generation continues without blocking user interaction.
+            dialog.remove();
+            showNotice('正在后台生成楼层长截图，可以继续操作酒馆。完成后会自动打开预览。', 'info');
             try {
                 const blob = await renderFloorImageBlob(sourceEntry, message, floorIndex, swipeIndex);
                 showFloorExportPreview(blob, sourceEntry, floorIndex, swipeIndex);
             } catch (error) {
                 console.error('[档案] 楼层长截图失败：', error);
                 showNotice(error.message || '楼层长截图失败。', 'error');
-            } finally {
-                if (button.isConnected) {
-                    button.disabled = false;
-                    button.textContent = '生成长截图预览';
-                }
             }
         });
         document.body.append(dialog);
