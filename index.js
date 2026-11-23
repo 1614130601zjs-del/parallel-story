@@ -106,6 +106,8 @@
 
     function stripAuxiliaryFloorContent(value) {
         return String(value ?? '')
+            // Structured top status bars are metadata, not floor prose.
+            .replace(/<status_top\\b[^>]*>[\\s\\S]*?<\\/status_top\\s*>/gi, '')
             // Prompt notes, progress counters, and other HTML comments.
             .replace(/<!--[\s\S]*?-->/g, '')
             // Non-story padding used to prevent premature response truncation.
