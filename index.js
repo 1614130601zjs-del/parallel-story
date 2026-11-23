@@ -138,7 +138,8 @@
         if (settings.theme === 'native' && source) {
             node = source.cloneNode(true);
             node.querySelectorAll('.mes_buttons,.mes_edit_buttons,.mes_timer,.mesIDDisplay').forEach((el) => el.remove());
-            const body = node.querySelector('.mes_text'); if (body) body.innerHTML = content;
+            const body = node.querySelector('.mes_text');
+            if (body && swipeIndex !== getFloorSwipeList(message).current) body.innerHTML = content;
             node.removeAttribute('style'); node.style.cssText = 'display:block!important;position:relative!important;width:100%!important;max-width:100%!important;margin:0!important;';
         } else {
             node = document.createElement('article'); node.className = 'ps-export-card';
