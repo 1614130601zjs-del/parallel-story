@@ -921,7 +921,7 @@
         const name = selected[0]?.characterName || '角色收藏';
         const rows = selected.map((item) =>
             '<article class="parallel-story-favorite-row"><div class="parallel-story-favorite-meta">' + escapeHtml(item.fileName) + ' · 第 ' + (item.floorIndex + 1) + ' 楼 · Swipe ' + (item.swipeIndex + 1) + '</div>' +
-            '<div class="parallel-story-favorite-preview">' + escapeHtml(extractFloorContent(item.mes).replace(/\\s+/g, ' ').slice(0, 180)) + '</div>' +
+            '<div class="parallel-story-favorite-preview">' + escapeHtml(extractFloorContent(item.mes).replace(/\s+/g, ' ').slice(0, 180)) + '</div>' +
             '<div class="parallel-story-favorite-actions"><button data-action="export-favorite-image" data-id="' + escapeHtml(item.id) + '">导出图片</button><button data-action="remove-favorite" data-id="' + escapeHtml(item.id) + '">取消收藏</button></div></article>'
         ).join('');
         list.innerHTML = '<div class="parallel-story-floor-heading"><button class="parallel-story-back" data-action="back-favorites">‹ 返回收藏夹</button><div class="parallel-story-selected-character">' + escapeHtml(name) + ' · ' + selected.length + ' 条收藏</div></div>' +
