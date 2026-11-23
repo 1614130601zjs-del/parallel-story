@@ -145,7 +145,7 @@
         }
     }
 
-    async function exportFloorImage(entry, message, floorIndex, swipeIndex, overrides) {
+    async function renderFloorImageBlob(entry, message, floorIndex, swipeIndex, overrides) {
         const settings = Object.assign(getExportSettings(), overrides || {}), html2canvas = await loadHtml2Canvas();
         const context = getContext(), scope = getCurrentScope(context);
         const sameChat = normalizeChatFile(getCurrentChatFile(context)) === normalizeChatFile(entry.fileName) && scope.characterAvatar === entry.characterAvatar;
@@ -191,12 +191,41 @@
             const canvas = await html2canvas(stage, { backgroundColor: settings.theme === 'card' ? settings.background : null,
                 scale: Math.min(2, window.devicePixelRatio || 1), useCORS: true, allowTaint: false, logging: false,
                 width: stage.scrollWidth, height: stage.scrollHeight, windowWidth: Math.max(document.documentElement.clientWidth, stage.scrollWidth) });
-            const blob = await new Promise((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error('图片生成失败')), 'image/png'));
-            const url = URL.createObjectURL(blob), anchor = document.createElement('a');
-            anchor.href = url; anchor.download = '档案-' + normalizeChatFile(entry.fileName) + '-第' + (floorIndex + 1) + '楼-Swipe' + (swipeIndex + 1) + '.png';
-            document.body.append(anchor); anchor.click(); anchor.remove(); setTimeout(() => URL.revokeObjectURL(url), 1500);
+            return await new Promise((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error('图片生成失败')), 'image/png'));
         } finally { stage.remove(); }
     }
+
+    function downloadFloorImage(blob, entry, floorIndex, swipeIndex) {
+        const url = URL.createObjectURL(blob), anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = '档案-' + normalizeChatFile(entry.fileName) + '-第' + (floorIndex + 1) + '楼-Swipe' + (swipeIndex + 1) + '.png';
+        document.body.append(anchor); anchor.click(); anchor.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 3000);
+    }
+
+    function showFloorExportPreview(blob, entry, floorIndex, swipeIndex) {
+        document.querySelector('.parallel-story-export-preview')?.remove();
+        const preview = document.createElement('section');
+        const url = URL.createObjectURL(blob);
+        preview.className = 'parallel-story-export-preview';
+        preview.innerHTML = '<div class="parallel-story-export-preview-dialog" role="dialog" aria-modal="true" aria-label="图片导出预览">' +
+            '<header><strong>导出预览</strong><button type="button" data-preview-action="close" aria-label="关闭">×</button></header>' +
+            '<div class="parallel-story-export-preview-canvas"><img alt="即将导出的 PNG 图片预览"></div>' +
+            '<footer><button type="button" data-preview-action="back">返回设置</button><button type="button" data-preview-action="confirm">确认导出 PNG</button></footer></div>';
+        preview.querySelector('img').src = url;
+        preview.addEventListener('click', (event) => {
+            if (event.target === preview || event.target.closest('[data-preview-action="close"]') || event.target.closest('[data-preview-action="back"]')) {
+                preview.remove(); URL.revokeObjectURL(url); return;
+            }
+            if (event.target.closest('[data-preview-action="confirm"]')) {
+                downloadFloorImage(blob, entry, floorIndex, swipeIndex);
+                preview.remove(); URL.revokeObjectURL(url);
+                showNotice('图片已导出。', 'success');
+            }
+        });
+        document.body.append(preview);
+    }
+
     function showFloorExportSettings(root, floorIndex, swipeIndex, entryOverride = null, dataOverride = null) {
         document.querySelector('.parallel-story-export-settings')?.remove();
         const settings = getExportSettings(), dialog = document.createElement('section');
@@ -212,11 +241,11 @@
             '<label class="parallel-story-export-css-label">自定义 CSS <span>仅影响导出图片</span></label>' +
             '<textarea class="parallel-story-export-css" data-export-setting="customCss" spellcheck="false" placeholder=".ps-export-content { font-family: serif; letter-spacing: .04em; line-height: 2; }">' + escapeHtml(settings.customCss) + '</textarea>' +
             '<div class="parallel-story-export-hint">可使用 .ps-export-stage、.ps-export-card、.ps-export-content、.mes、.mes_text 等选择器。</div>' +
-            '<footer><button type="button" data-export-action="save">保存样式</button><button type="button" data-export-action="download">导出 PNG</button></footer></div>';
+            '<footer><button type="button" data-export-action="save">保存样式</button><button type="button" data-export-action="preview">预览图片</button></footer></div>';
         dialog.addEventListener('click', async (event) => {
             if (event.target === dialog || event.target.closest('[data-export-action="close"]')) return dialog.remove();
             const action = event.target.closest('[data-export-action]')?.dataset.exportAction;
-            if (action !== 'save' && action !== 'download') return;
+            if (action !== 'save' && action !== 'preview') return;
             const next = Object.assign({}, getExportSettings());
             dialog.querySelectorAll('[data-export-setting]').forEach((input) => {
                 const key = input.dataset.exportSetting;
@@ -228,10 +257,17 @@
             const sourceEntry = entryOverride || root._floorEntry;
             const message = sourceData && sourceData[floorIndex];
             if (!message || !sourceEntry) return showNotice('找不到要导出的楼层。', 'error');
-            const button = dialog.querySelector('[data-export-action="download"]'); button.disabled = true; button.textContent = '正在生成…';
-            try { await exportFloorImage(sourceEntry, message, floorIndex, swipeIndex, next); showNotice('图片已导出。', 'success'); }
-            catch (error) { console.error('[档案] 图片导出失败：', error); showNotice(error.message || '图片导出失败。', 'error'); }
-            finally { button.disabled = false; button.textContent = '导出 PNG'; }
+            const button = dialog.querySelector('[data-export-action="preview"]');
+            button.disabled = true; button.textContent = '正在生成预览…';
+            try {
+                const blob = await renderFloorImageBlob(sourceEntry, message, floorIndex, swipeIndex, next);
+                showFloorExportPreview(blob, sourceEntry, floorIndex, swipeIndex);
+            } catch (error) {
+                console.error('[档案] 图片预览失败：', error);
+                showNotice(error.message || '图片预览失败。', 'error');
+            } finally {
+                if (button.isConnected) { button.disabled = false; button.textContent = '预览图片'; }
+            }
         });
         document.body.append(dialog);
     }
